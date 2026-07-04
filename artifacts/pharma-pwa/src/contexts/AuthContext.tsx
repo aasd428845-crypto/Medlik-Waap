@@ -8,8 +8,10 @@ interface AuthContextType {
   firebaseUser: FirebaseUser | null;
   userProfile: User | null;
   loading: boolean;
+  isPreviewMode: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  previewAs: (role: 'company_director' | 'branch_manager') => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -18,6 +20,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
@@ -77,10 +80,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const logout = () => signOut(auth);
+  const previewAs = (role: 'company_director' | 'branch_manager') => {
+    const mockProfile: User = {
+      userId: 'preview-user',
+      name: role === 'company_director' ? 'مدير عام (معاينة)' : 'مدير فرع (معاينة)',
+      email: 'preview@example.com',
+      role,
+      branchId: role === 'branch_manager' ? 'preview-branch' : undefined,
+      branchName: role === 'branch_manager' ? 'فرع التجريبي' : undefined,
+    };
+    setIsPreviewMode(true);
+    setUserProfile(mockProfile);
+    setFirebaseUser(null);
+  };
+
+  const logout = async () => {
+    setIsPreviewMode(false);
+    setUserProfile(null);
+    if (firebaseUser) await signOut(auth);
+  };
 
   return (
-    <AuthContext.Provider value={{ firebaseUser, userProfile, loading, login, logout }}>
+    <AuthContext.Provider value={{ firebaseUser, userProfile, loading, isPreviewMode, login, logout, previewAs }}>
       {children}
     </AuthContext.Provider>
   );

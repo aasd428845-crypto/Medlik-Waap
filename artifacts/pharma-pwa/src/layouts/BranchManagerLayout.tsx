@@ -1,9 +1,9 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Pill, Box, FileText, Tag, PackageSearch, MapPin, LogOut } from 'lucide-react';
+import { Pill, Box, FileText, Tag, PackageSearch, MapPin, LogOut, Eye } from 'lucide-react';
 
 export function BranchManagerLayout() {
-  const { userProfile, logout } = useAuth();
+  const { userProfile, logout, isPreviewMode } = useAuth();
   const location = useLocation();
 
   const navItems = [
@@ -15,6 +15,14 @@ export function BranchManagerLayout() {
 
   return (
     <div className="min-h-screen bg-muted/20 flex flex-col">
+      {/* Preview mode banner */}
+      {isPreviewMode && (
+        <div className="bg-amber-400 text-amber-900 text-xs font-bold text-center py-1.5 px-4 flex items-center justify-center gap-2 shrink-0 z-50">
+          <Eye className="w-3.5 h-3.5" />
+          وضع المعاينة المؤقتة — البيانات وهمية ولا تتصل بـ Firebase
+          <Eye className="w-3.5 h-3.5" />
+        </div>
+      )}
       {/* Top Header */}
       <header className="bg-primary text-primary-foreground shadow-md shrink-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

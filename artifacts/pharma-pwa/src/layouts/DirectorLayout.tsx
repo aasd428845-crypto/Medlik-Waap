@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Pill, LayoutDashboard, Database, Activity, LayoutList, LogOut } from 'lucide-react';
+import { Pill, LayoutDashboard, Database, Activity, LayoutList, LogOut, Eye } from 'lucide-react';
 
 export function DirectorLayout() {
   const { userProfile, logout } = useAuth();
@@ -21,8 +21,19 @@ export function DirectorLayout() {
     { to: '/director/orders-monitoring', label: 'مراقبة الطلبات', icon: LayoutList },
   ];
 
+  const { isPreviewMode } = useAuth();
+
   return (
-    <div className="flex h-screen bg-muted/20">
+    <div className="flex flex-col h-screen">
+      {/* Preview mode banner */}
+      {isPreviewMode && (
+        <div className="bg-amber-400 text-amber-900 text-xs font-bold text-center py-1.5 px-4 flex items-center justify-center gap-2 shrink-0 z-50">
+          <Eye className="w-3.5 h-3.5" />
+          وضع المعاينة المؤقتة — البيانات وهمية ولا تتصل بـ Firebase
+          <Eye className="w-3.5 h-3.5" />
+        </div>
+      )}
+      <div className="flex flex-1 bg-muted/20 overflow-hidden">
       {/* Sidebar */}
       <aside className="w-64 bg-sidebar border-l border-sidebar-border flex flex-col hidden md:flex shrink-0">
         <div className="p-6 border-b border-sidebar-border">
@@ -101,6 +112,7 @@ export function DirectorLayout() {
         <main className="flex-1 overflow-auto p-4 md:p-6 pb-20 md:pb-6 relative">
           <Outlet />
         </main>
+      </div>
       </div>
     </div>
   );

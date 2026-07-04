@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Pill, LogIn } from 'lucide-react';
+import { Pill, LogIn, Eye } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ErrorMessage } from '@/components/ErrorMessage';
 
@@ -9,8 +9,13 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { login } = useAuth();
+  const { login, previewAs } = useAuth();
   const navigate = useNavigate();
+
+  const handlePreview = (role: 'company_director' | 'branch_manager') => {
+    previewAs(role);
+    navigate(role === 'company_director' ? '/director' : '/branch');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,6 +103,35 @@ export function LoginPage() {
               </button>
             </div>
           </form>
+
+          {/* ── وضع المعاينة المؤقتة ── */}
+          <div className="mt-6 pt-6 border-t border-dashed border-amber-300">
+            <div className="flex items-center justify-center gap-2 mb-3">
+              <Eye className="w-4 h-4 text-amber-500" />
+              <span className="text-xs font-bold text-amber-600 uppercase tracking-wide">
+                معاينة مؤقتة — بدون تسجيل دخول
+              </span>
+              <Eye className="w-4 h-4 text-amber-500" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => handlePreview('company_director')}
+                className="flex flex-col items-center gap-1 py-3 px-2 rounded-xl border-2 border-blue-200 bg-blue-50 hover:bg-blue-100 hover:border-blue-400 transition-all text-blue-700 font-semibold text-sm"
+              >
+                <span className="text-xl">🏢</span>
+                <span>واجهة المدير العام</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePreview('branch_manager')}
+                className="flex flex-col items-center gap-1 py-3 px-2 rounded-xl border-2 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-400 transition-all text-emerald-700 font-semibold text-sm"
+              >
+                <span className="text-xl">🏪</span>
+                <span>واجهة مدير الفرع</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
