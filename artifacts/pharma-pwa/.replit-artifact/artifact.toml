@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "Pharma Manager PWA"
+version = "1.0.0"
+id = "artifacts/pharma-pwa"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25697
+
+[services.development]
+run = "pnpm --filter @workspace/pharma-pwa run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/pharma-pwa", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/pharma-pwa/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25697"
+BASE_PATH = "/"
