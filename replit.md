@@ -1,36 +1,67 @@
-# [Project name]
+# نظام إدارة الأدوية — Pharma Manager PWA
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+تطبيق ويب تقدمي (PWA) لإدارة عمليات شركة الأدوية، يخدم **المدير العام** و**مدير الفرع**.
 
-## Run & Operate
+## تشغيل المشروع
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- `pnpm --filter @workspace/pharma-pwa run dev` — تشغيل واجهة الويب (يُدار تلقائياً بالـworkflow)
+- `pnpm --filter @workspace/pharma-pwa run typecheck` — فحص TypeScript
 
-## Stack
+## التقنيات المستخدمة
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- **Frontend**: React 19 + TypeScript + Vite
+- **Styling**: Tailwind CSS + مكتبة shadcn/ui، خط Cairo (Google Fonts)، RTL عربي كامل
+- **Backend**: Firebase (Firestore + Auth) — متصل بنفس مشروع Firebase الخاص بتطبيق Android
+- **PWA**: vite-plugin-pwa — Service Worker + Web Manifest
+- **Routing**: react-router-dom v7
 
-## Where things live
+## متغيرات البيئة المطلوبة (Secrets)
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+يجب ضبط هذه الأسرار في إعدادات Replit Secrets:
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_STORAGE_BUCKET`
+- `VITE_FIREBASE_MESSAGING_SENDER_ID`
+- `VITE_FIREBASE_APP_ID`
 
-## Architecture decisions
+## بنية الملفات
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+```
+artifacts/pharma-pwa/src/
+├── lib/firebase.ts          — إعداد Firebase (يقرأ من VITE_FIREBASE_* env vars)
+├── types/models.ts          — نماذج البيانات TypeScript
+├── contexts/AuthContext.tsx — سياق المصادقة + حماية الأدوار
+├── pages/
+│   ├── LoginPage.tsx
+│   ├── director/
+│   │   ├── DashboardPage.tsx        — KPIs + تنبيهات المخزون الحرج
+│   │   ├── CatalogPage.tsx          — إدارة كتالوج المنتجات
+│   │   ├── InventoryOverviewPage.tsx — جدول محوري products × branches
+│   │   └── OrdersMonitoringPage.tsx  — مراقبة الطلبات + إعادة التوجيه
+│   └── branch/
+│       ├── AllocationPage.tsx       — عمليات التخصيص + التحويل الذكي
+│       ├── InvoicesPage.tsx         — سجل الفواتير
+│       ├── OffersPage.tsx           — عروض الأسعار
+│       ├── WarehouseInventoryPage.tsx — مخزون المستودع
+│       └── AddressesPage.tsx        — إدارة العناوين
+└── layouts/
+    ├── DirectorLayout.tsx   — sidebar ثابت + header
+    └── BranchManagerLayout.tsx — تبويبات علوية
+```
 
-## Product
+## مجموعات Firestore المستخدمة
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+```
+users, orders, invoices, products, warehouse_inventory,
+branches, branch_offers, addresses, director_notifications
+```
+
+## أدوار المستخدمين
+
+- `company_director` → واجهة المدير العام (`/director/*`)
+- `branch_manager` → واجهة مدير الفرع (`/branch/*`)
+- أي دور آخر → رفض الدخول مع رسالة واضحة
 
 ## User preferences
 
@@ -38,8 +69,6 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
-
-## Pointers
-
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- لا تستخدم `@workspace/api-client-react` في pharma-pwa — Firebase مباشرة فقط
+- بعد تغيير الـsecrets أعد تشغيل workflow pharma-pwa لإعادة قراءتها
+- VITE_ vars يجب أن تكون في Secrets (ليس env vars عادية) لأنها تُضمَّن وقت البناء
