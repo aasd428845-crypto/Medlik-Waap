@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { BranchOffer } from '@/types/models';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
@@ -19,18 +18,26 @@ export function OffersPage() {
       if (!userProfile?.branchId) return;
       try {
         setLoading(true);
-        const q = query(collection(db, 'branch_offers'), where('branchId', '==', userProfile.branchId));
-        const docs = await getDocs(q);
-        const list: BranchOffer[] = [];
-        docs.forEach(d => list.push({ offerId: d.id, ...d.data() } as BranchOffer));
-        // Sort in memory desc
-        list.sort((a, b) => {
-          const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-          const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-          return timeB - timeA;
-        });
+        const { data, error: err } = await supabase
+          .from('branch_offers')
+          .select('*')
+          .eq('branch_id', userProfile.branchId)
+          .order('created_at', { ascending: false });
+
+        if (err) throw err;
+
+        const list: BranchOffer[] = (data ?? []).map(row => ({
+          offerId: row.id,
+          branchId: row.branch_id ?? '',
+          productSku: row.product_sku ?? '',
+          productName: row.product_name ?? '',
+          offeredPrice: row.offered_price ?? 0,
+          status: (row.status ?? 'pending') as BranchOffer['status'],
+          createdAt: row.created_at ?? '',
+        }));
+
         setOffers(list);
-      } catch (err) {
+      } catch {
         setError('تعذر جلب العروض');
       } finally {
         setLoading(false);
@@ -82,7 +89,7 @@ export function OffersPage() {
                     <StatusBadge status={offer.status} type="offer" />
                   </td>
                   <td className="px-4 py-3 text-left text-muted-foreground text-xs" dir="ltr">
-                    {offer.createdAt?.toDate ? offer.createdAt.toDate().toLocaleDateString('en-GB') : '-'}
+                    {offer.createdAt ? new Date(offer.createdAt).toLocaleDateString('en-GB') : '-'}
                   </td>
                 </tr>
               ))}

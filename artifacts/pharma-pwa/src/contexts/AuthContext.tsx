@@ -1,11 +1,10 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut, User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { Session } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabaseClient';
 import { User } from '@/types/models';
 
 interface AuthContextType {
-  firebaseUser: FirebaseUser | null;
+  session: Session | null;
   userProfile: User | null;
   loading: boolean;
   isPreviewMode: boolean;
@@ -16,67 +15,107 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+function mapDbRowToUser(row: Record<string, unknown>): User {
+  return {
+    userId: row.id as string,
+    name: (row.name as string) ?? '',
+    email: (row.email as string) ?? '',
+    role: row.role as User['role'],
+    branchId: (row.branch_id as string) ?? undefined,
+    branchName: (row.branch_name as string) ?? undefined,
+    orgName: (row.org_name as string) ?? undefined,
+    phone: (row.phone as string) ?? undefined,
+    city: (row.city as string) ?? undefined,
+    governorate: (row.governorate as string) ?? undefined,
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [userProfile, setUserProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-      setFirebaseUser(fbUser);
-      if (fbUser) {
-        try {
-          const userDoc = await getDoc(doc(db, 'users', fbUser.uid));
-          if (userDoc.exists()) {
-            const profile = userDoc.data() as User;
-            if (profile.role !== 'branch_manager' && profile.role !== 'company_director') {
-              await signOut(auth);
-              setUserProfile(null);
-              setFirebaseUser(null);
-            } else {
-              setUserProfile({ ...profile, userId: fbUser.uid });
-            }
-          } else {
-            // No matching profile in Firestore — fail closed: sign out immediately
-            await signOut(auth);
-            setUserProfile(null);
-            setFirebaseUser(null);
-          }
-        } catch (e) {
-          // Network/permission error — fail closed as well
-          await signOut(auth);
-          setUserProfile(null);
-          setFirebaseUser(null);
-        }
-      } else {
+  async function loadProfile(userId: string): Promise<boolean> {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error || !data) {
+        await supabase.auth.signOut();
         setUserProfile(null);
+        setSession(null);
+        return false;
+      }
+
+      const role = data.role as string;
+      if (role !== 'branch_manager' && role !== 'company_director') {
+        await supabase.auth.signOut();
+        setUserProfile(null);
+        setSession(null);
+        return false;
+      }
+
+      setUserProfile(mapDbRowToUser(data));
+      return true;
+    } catch {
+      await supabase.auth.signOut();
+      setUserProfile(null);
+      setSession(null);
+      return false;
+    }
+  }
+
+  useEffect(() => {
+    // Get the initial session
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      setSession(s);
+      if (s) {
+        loadProfile(s.user.id).finally(() => setLoading(false));
+      } else {
+        setLoading(false);
+      }
+    });
+
+    // Subscribe to future changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, s) => {
+      setSession(s);
+      if (s) {
+        await loadProfile(s.user.id);
+      } else {
+        // Only clear if we're not in local preview mode
+        setIsPreviewMode(prev => {
+          if (!prev) setUserProfile(null);
+          return prev;
+        });
       }
       setLoading(false);
     });
-    return unsubscribe;
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const login = async (email: string, password: string) => {
-    const cred = await signInWithEmailAndPassword(auth, email, password);
-    try {
-      const userDoc = await getDoc(doc(db, 'users', cred.user.uid));
-      if (!userDoc.exists()) {
-        await signOut(auth);
-        throw new Error('المستخدم غير موجود في النظام. تواصل مع مسؤول النظام.');
-      }
-      const profile = userDoc.data() as User;
-      if (profile.role !== 'branch_manager' && profile.role !== 'company_director') {
-        await signOut(auth);
-        throw new Error('ليس لديك صلاحية الوصول لهذه الواجهة. هذا التطبيق مخصص للمديرين فقط.');
-      }
-    } catch (err) {
-      // If error was thrown above, re-throw it; otherwise sign out for safety
-      if ((err as Error).message && (err as Error).message !== 'Firebase: Error (auth/wrong-password).') {
-        throw err;
-      }
-      await signOut(auth);
-      throw err;
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw new Error(error.message);
+
+    const { data: userRow, error: profileError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', data.user.id)
+      .single();
+
+    if (profileError || !userRow) {
+      await supabase.auth.signOut();
+      throw new Error('المستخدم غير موجود في النظام. تواصل مع مسؤول النظام.');
+    }
+
+    if (userRow.role !== 'branch_manager' && userRow.role !== 'company_director') {
+      await supabase.auth.signOut();
+      throw new Error('هذا التطبيق مخصص لمدراء الفروع والمدير العام فقط.');
     }
   };
 
@@ -91,17 +130,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
     setIsPreviewMode(true);
     setUserProfile(mockProfile);
-    setFirebaseUser(null);
+    setSession(null);
   };
 
   const logout = async () => {
     setIsPreviewMode(false);
     setUserProfile(null);
-    if (firebaseUser) await signOut(auth);
+    if (session) await supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ firebaseUser, userProfile, loading, isPreviewMode, login, logout, previewAs }}>
+    <AuthContext.Provider value={{ session, userProfile, loading, isPreviewMode, login, logout, previewAs }}>
       {children}
     </AuthContext.Provider>
   );

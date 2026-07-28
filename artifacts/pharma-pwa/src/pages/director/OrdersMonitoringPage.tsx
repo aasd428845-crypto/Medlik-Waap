@@ -1,49 +1,76 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, orderBy, getDocs, updateDoc, doc, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { Order, Branch } from '@/types/models';
+import { supabase } from '@/lib/supabaseClient';
+import { Order, Branch, OrderLine } from '@/types/models';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { StatusBadge } from '@/components/StatusBadge';
 import { ChevronDown, ChevronUp, MapPin, Phone, MessageSquare, Send } from 'lucide-react';
+
+function mapRowToOrder(row: Record<string, unknown>): Order {
+  const rawLines = (row.order_lines ?? []) as unknown[];
+  const orderLines: OrderLine[] = rawLines.map((l: unknown) => {
+    const line = l as Record<string, unknown>;
+    return {
+      sku: (line.sku as string) ?? '',
+      productName: (line.product_name ?? line.productName ?? '') as string,
+      requestedQty: (line.requested_qty ?? line.requestedQty ?? 0) as number,
+      allocatedQty: (line.allocated_qty ?? line.allocatedQty ?? 0) as number,
+      unitPrice: (line.unit_price ?? line.unitPrice ?? 0) as number,
+    };
+  });
+
+  return {
+    orderId: row.id as string,
+    clientId: (row.client_id as string) ?? '',
+    clientName: (row.client_name as string) ?? '',
+    clientType: (row.client_type as string) ?? 'صيدلية',
+    clientGovernorate: (row.client_governorate as string) ?? '',
+    orderLines,
+    status: ((row.status ?? row.order_status ?? 'Draft') as Order['status']),
+    targetBranches: ((row.target_branches ?? []) as string[]),
+    totalAmount: (row.total_amount as number) ?? 0,
+    createdAt: row.created_at as string,
+    scheduledDeliveryDate: (row.scheduled_delivery_date as string) ?? undefined,
+    parentOrderId: (row.parent_order_id as string) ?? undefined,
+  };
+}
 
 export function OrdersMonitoringPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  
-  const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
 
-  // Redirection & Notification State
+  const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [selectedBranchForRedirect, setSelectedBranchForRedirect] = useState<Record<string, string>>({});
   const [alertMessage, setAlertMessage] = useState('');
-  const [alertingOrder, setAlertingOrder] = useState<{orderId: string, branchId: string} | null>(null);
+  const [alertingOrder, setAlertingOrder] = useState<{ orderId: string; branchId: string } | null>(null);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      // Fetch Branches
-      const bDocs = await getDocs(collection(db, 'branches'));
-      const bList: Branch[] = [];
-      bDocs.forEach(d => bList.push({ branchId: d.id, ...d.data() } as Branch));
-      setBranches(bList);
 
-      // Fetch Orders
-      const oQ = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
-      const oDocs = await getDocs(oQ);
-      const oList: Order[] = [];
-      oDocs.forEach(d => {
-        const data = d.data() as Order;
-        // fallback status for older records
-        const status = data.status || data.orderStatus || 'Draft';
-        oList.push({ ...data, orderId: d.id, status });
-      });
-      setOrders(oList);
+      const { data: bData, error: bErr } = await supabase
+        .from('branches')
+        .select('id, branch_name, governorate, latitude, longitude');
+      if (bErr) throw bErr;
+      setBranches((bData ?? []).map(row => ({
+        branchId: row.id,
+        branchName: row.branch_name ?? '',
+        governorate: row.governorate ?? '',
+        latitude: row.latitude ?? 0,
+        longitude: row.longitude ?? 0,
+      })));
+
+      const { data: oData, error: oErr } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (oErr) throw oErr;
+      setOrders((oData ?? []).map(r => mapRowToOrder(r as Record<string, unknown>)));
+
     } catch (err) {
       console.error(err);
       setError('تعذر جلب بيانات الطلبات');
@@ -52,21 +79,18 @@ export function OrdersMonitoringPage() {
     }
   };
 
-  const toggleExpand = (id: string) => {
-    setExpandedOrder(expandedOrder === id ? null : id);
-  };
-
   const handleRedirect = async (order: Order) => {
     const newBranchId = selectedBranchForRedirect[order.orderId];
     if (!newBranchId) return alert('اختر فرعاً لإعادة التوجيه');
-    
     try {
-      await updateDoc(doc(db, 'orders', order.orderId), {
-        targetBranches: [newBranchId] // Replacing for simplicity, or we could append
-      });
+      const { error: err } = await supabase
+        .from('orders')
+        .update({ target_branches: [newBranchId] })
+        .eq('id', order.orderId);
+      if (err) throw err;
       setOrders(orders.map(o => o.orderId === order.orderId ? { ...o, targetBranches: [newBranchId] } : o));
       alert('تم إعادة توجيه الطلب بنجاح');
-    } catch (err) {
+    } catch {
       alert('خطأ أثناء إعادة التوجيه');
     }
   };
@@ -74,19 +98,19 @@ export function OrdersMonitoringPage() {
   const sendAlert = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!alertingOrder || !alertMessage.trim()) return;
-    
     try {
-      await addDoc(collection(db, 'director_notifications'), {
-        orderId: alertingOrder.orderId,
-        branchId: alertingOrder.branchId,
+      const { error: err } = await supabase.from('director_notifications').insert({
+        order_id: alertingOrder.orderId,
+        branch_id: alertingOrder.branchId,
         message: alertMessage,
         type: 'branch_alert',
-        createdAt: serverTimestamp()
+        created_at: new Date().toISOString(),
       });
+      if (err) throw err;
       setAlertingOrder(null);
       setAlertMessage('');
       alert('تم إرسال التنبيه للفرع');
-    } catch (err) {
+    } catch {
       alert('تعذر إرسال التنبيه');
     }
   };
@@ -120,14 +144,14 @@ export function OrdersMonitoringPage() {
             <tbody className="divide-y divide-border">
               {orders.map(order => (
                 <React.Fragment key={order.orderId}>
-                  <tr 
+                  <tr
                     className={`hover:bg-muted/30 cursor-pointer transition-colors ${expandedOrder === order.orderId ? 'bg-primary/5' : ''}`}
-                    onClick={() => toggleExpand(order.orderId)}
+                    onClick={() => setExpandedOrder(expandedOrder === order.orderId ? null : order.orderId)}
                   >
                     <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{order.orderId.slice(-8)}</td>
                     <td className="px-4 py-3">
                       <div className="font-medium text-foreground">{order.clientName}</div>
-                      <div className="text-xs text-muted-foreground">{order.clientType || 'صيدلية'}</div>
+                      <div className="text-xs text-muted-foreground">{order.clientType}</div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{order.clientGovernorate}</td>
                     <td className="px-4 py-3">
@@ -142,17 +166,18 @@ export function OrdersMonitoringPage() {
                     <td className="px-4 py-3 font-bold text-foreground">${order.totalAmount?.toLocaleString()}</td>
                     <td className="px-4 py-3"><StatusBadge status={order.status} type="order" /></td>
                     <td className="px-4 py-3 text-center">
-                      {expandedOrder === order.orderId ? <ChevronUp className="w-5 h-5 text-muted-foreground inline" /> : <ChevronDown className="w-5 h-5 text-muted-foreground inline" />}
+                      {expandedOrder === order.orderId
+                        ? <ChevronUp className="w-5 h-5 text-muted-foreground inline" />
+                        : <ChevronDown className="w-5 h-5 text-muted-foreground inline" />}
                     </td>
                   </tr>
 
-                  {/* Expanded Content */}
                   {expandedOrder === order.orderId && (
                     <tr className="bg-muted/10 border-b-2 border-primary/20">
                       <td colSpan={7} className="p-0">
                         <div className="p-4 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-6 animate-in slide-in-from-top-2 duration-200">
-                          
-                          {/* Order Details */}
+
+                          {/* Order Lines */}
                           <div className="space-y-4">
                             <h4 className="font-bold text-foreground text-sm border-b pb-2">محتوى الطلب</h4>
                             <div className="bg-background border rounded-lg overflow-hidden">
@@ -180,24 +205,18 @@ export function OrdersMonitoringPage() {
                           {/* Actions */}
                           <div className="space-y-4">
                             <h4 className="font-bold text-foreground text-sm border-b pb-2">إجراءات إدارية</h4>
-                            
+
                             <div className="flex gap-3">
-                              {/* Contact */}
-                              <a 
-                                href={`tel:0000000`} 
-                                onClick={(e) => {
-                                  // In real app, order would have phone or we query user
-                                  alert('سيتم الاتصال برقم العميل المسجل');
-                                  e.preventDefault();
-                                }}
+                              <a
+                                href="tel:0000000"
+                                onClick={e => { alert('سيتم الاتصال برقم العميل المسجل'); e.preventDefault(); }}
                                 className="flex-1 bg-background border hover:bg-muted text-foreground px-4 py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-medium transition-colors"
                               >
                                 <Phone className="w-4 h-4 text-primary" />
                                 اتصال بالعميل 📞
                               </a>
-                              
-                              {/* Alert Branch */}
-                              <button 
+
+                              <button
                                 onClick={() => setAlertingOrder({ orderId: order.orderId, branchId: order.targetBranches?.[0] || '' })}
                                 className="flex-1 bg-amber-50 border border-amber-200 hover:bg-amber-100 text-amber-800 px-4 py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-medium transition-colors"
                               >
@@ -206,7 +225,6 @@ export function OrdersMonitoringPage() {
                               </button>
                             </div>
 
-                            {/* Redirect */}
                             {['Submitted', 'Draft', 'Allocated'].includes(order.status) && (
                               <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-3">
                                 <h5 className="text-xs font-bold text-primary flex items-center gap-1.5">
@@ -214,17 +232,17 @@ export function OrdersMonitoringPage() {
                                   إعادة التوجيه اليدوي
                                 </h5>
                                 <div className="flex gap-2">
-                                  <select 
+                                  <select
                                     className="flex-1 border-primary/30 rounded-lg text-sm bg-background px-3 py-2 focus:ring-1 focus:ring-primary"
                                     value={selectedBranchForRedirect[order.orderId] || ''}
-                                    onChange={(e) => setSelectedBranchForRedirect({...selectedBranchForRedirect, [order.orderId]: e.target.value})}
+                                    onChange={e => setSelectedBranchForRedirect({ ...selectedBranchForRedirect, [order.orderId]: e.target.value })}
                                   >
                                     <option value="">اختر فرعاً بديلاً...</option>
                                     {branches.map(b => (
                                       <option key={b.branchId} value={b.branchId}>{b.branchName} ({b.governorate})</option>
                                     ))}
                                   </select>
-                                  <button 
+                                  <button
                                     onClick={() => handleRedirect(order)}
                                     className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors shrink-0"
                                   >
@@ -233,7 +251,6 @@ export function OrdersMonitoringPage() {
                                 </div>
                               </div>
                             )}
-
                           </div>
                         </div>
                       </td>
@@ -266,7 +283,7 @@ export function OrdersMonitoringPage() {
                 <p className="text-sm text-muted-foreground">
                   الطلب: <span className="font-mono text-xs">{alertingOrder.orderId.slice(-8)}</span>
                 </p>
-                <textarea 
+                <textarea
                   required
                   rows={4}
                   className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary resize-none bg-background"

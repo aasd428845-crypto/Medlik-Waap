@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
-import { collection, query, where, getDocs, updateDoc, setDoc, doc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/contexts/AuthContext';
-import { PharmaProduct, WarehouseInventoryItem } from '@/types/models';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { Search, RefreshCw, XCircle } from 'lucide-react';
@@ -24,55 +22,55 @@ export function WarehouseInventoryPage() {
   const [inventory, setInventory] = useState<InventoryRow[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Modal
   const [editingRow, setEditingRow] = useState<InventoryRow | null>(null);
   const [newQty, setNewQty] = useState(0);
   const [newExpiry, setNewExpiry] = useState('');
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    fetchData();
-  }, [userProfile?.branchId]);
+  useEffect(() => { fetchData(); }, [userProfile?.branchId]);
 
   const fetchData = async () => {
     if (!userProfile?.branchId) return;
     try {
       setLoading(true);
-      // Fetch Active Products
-      const pQ = query(collection(db, 'products'), where('isActive', '==', true));
-      const pDocs = await getDocs(pQ);
-      const productsMap = new Map<string, PharmaProduct>();
-      pDocs.forEach(d => {
-        const p = d.data() as PharmaProduct;
-        productsMap.set(p.sku, p);
-      });
 
-      // Fetch Inventory for this branch
-      const iQ = query(collection(db, 'warehouse_inventory'), where('branchId', '==', userProfile.branchId));
-      const iDocs = await getDocs(iQ);
-      const invMap = new Map<string, WarehouseInventoryItem>();
-      iDocs.forEach(d => {
-        const i = d.data() as WarehouseInventoryItem;
-        invMap.set(i.sku, i);
-      });
+      // Fetch active products
+      const { data: pData, error: pErr } = await supabase
+        .from('products')
+        .select('sku, commercial_name, scientific_name, dosage_form')
+        .eq('is_active', true);
+      if (pErr) throw pErr;
 
-      // Merge
-      const rows: InventoryRow[] = [];
-      productsMap.forEach(p => {
-        const i = invMap.get(p.sku);
-        rows.push({
-          sku: p.sku,
-          commercialName: p.commercialName,
-          scientificName: p.scientificName,
-          dosageForm: p.dosageForm,
-          availableQuantity: i ? i.availableQuantity : 0,
-          expiryDate: i?.expiryDate || '',
-          hasRecord: !!i
+      // Fetch branch inventory
+      const { data: iData, error: iErr } = await supabase
+        .from('warehouse_inventory')
+        .select('sku, available_quantity, expiry_date')
+        .eq('branch_id', userProfile.branchId);
+      if (iErr) throw iErr;
+
+      const invMap = new Map<string, { qty: number; expiry?: string }>();
+      for (const row of (iData ?? [])) {
+        invMap.set(row.sku ?? '', {
+          qty: row.available_quantity ?? 0,
+          expiry: row.expiry_date ?? undefined,
         });
+      }
+
+      const rows: InventoryRow[] = (pData ?? []).map(p => {
+        const inv = invMap.get(p.sku ?? '');
+        return {
+          sku: p.sku ?? '',
+          commercialName: p.commercial_name ?? '',
+          scientificName: p.scientific_name ?? '',
+          dosageForm: p.dosage_form ?? '',
+          availableQuantity: inv?.qty ?? 0,
+          expiryDate: inv?.expiry ?? '',
+          hasRecord: !!inv,
+        };
       });
 
       setInventory(rows);
-    } catch (err) {
+    } catch {
       setError('تعذر جلب المخزون');
     } finally {
       setLoading(false);
@@ -90,27 +88,28 @@ export function WarehouseInventoryPage() {
     if (!editingRow || !userProfile?.branchId) return;
     setSaving(true);
     try {
-      const docId = `${userProfile.branchId}_${editingRow.sku}`;
-      const docRef = doc(db, 'warehouse_inventory', docId);
-      
-      const payload: WarehouseInventoryItem = {
-        sku: editingRow.sku,
-        name: editingRow.commercialName,
-        dosageForm: editingRow.dosageForm,
-        availableQuantity: newQty,
-        expiryDate: newExpiry,
-        branchId: userProfile.branchId
-      };
+      const { error: err } = await supabase
+        .from('warehouse_inventory')
+        .upsert(
+          {
+            branch_id: userProfile.branchId,
+            sku: editingRow.sku,
+            name: editingRow.commercialName,
+            dosage_form: editingRow.dosageForm,
+            available_quantity: newQty,
+            expiry_date: newExpiry || null,
+          },
+          { onConflict: 'branch_id,sku' }
+        );
+      if (err) throw err;
 
-      if (editingRow.hasRecord) {
-        await updateDoc(docRef, payload as any);
-      } else {
-        await setDoc(docRef, payload);
-      }
-
-      setInventory(inventory.map(r => r.sku === editingRow.sku ? { ...r, availableQuantity: newQty, expiryDate: newExpiry, hasRecord: true } : r));
+      setInventory(inventory.map(r =>
+        r.sku === editingRow.sku
+          ? { ...r, availableQuantity: newQty, expiryDate: newExpiry, hasRecord: true }
+          : r
+      ));
       setEditingRow(null);
-    } catch (err) {
+    } catch {
       alert('خطأ أثناء تحديث الكمية');
     } finally {
       setSaving(false);
@@ -135,8 +134,8 @@ export function WarehouseInventoryPage() {
         </div>
         <div className="relative w-full sm:w-64">
           <Search className="w-4 h-4 absolute right-3 top-3 text-muted-foreground" />
-          <input 
-            type="text" 
+          <input
+            type="text"
             placeholder="بحث بالاسم أو الباركود..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
@@ -174,7 +173,7 @@ export function WarehouseInventoryPage() {
                     </td>
                     <td className="px-4 py-3 text-center text-muted-foreground" dir="ltr">{row.expiryDate || '-'}</td>
                     <td className="px-4 py-3 text-center">
-                      <button 
+                      <button
                         onClick={() => openEdit(row)}
                         className="p-1.5 text-primary hover:bg-primary/10 rounded-lg transition-colors inline-flex"
                         title="تحديث الكمية"
@@ -200,7 +199,7 @@ export function WarehouseInventoryPage() {
                 <XCircle className="w-5 h-5" />
               </button>
             </div>
-            
+
             <form onSubmit={handleSave} className="p-6 space-y-4">
               <div className="bg-muted/50 p-3 rounded-lg border mb-4">
                 <p className="font-medium text-sm text-foreground">{editingRow.commercialName}</p>
@@ -209,23 +208,23 @@ export function WarehouseInventoryPage() {
 
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">الكمية المتاحة فعلياً</label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   min="0"
-                  required 
+                  required
                   className="w-full border rounded-lg px-3 py-2 text-center text-lg font-bold focus:ring-2 focus:ring-primary bg-background"
-                  value={newQty} 
-                  onChange={e => setNewQty(parseInt(e.target.value) || 0)} 
+                  value={newQty}
+                  onChange={e => setNewQty(parseInt(e.target.value) || 0)}
                 />
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">تاريخ الانتهاء</label>
-                <input 
-                  type="date" 
+                <input
+                  type="date"
                   className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary bg-background text-sm"
-                  value={newExpiry} 
-                  onChange={e => setNewExpiry(e.target.value)} 
+                  value={newExpiry}
+                  onChange={e => setNewExpiry(e.target.value)}
                 />
               </div>
 

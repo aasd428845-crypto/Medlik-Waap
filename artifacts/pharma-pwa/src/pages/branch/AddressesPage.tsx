@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { collection, query, where, getDocs, addDoc, updateDoc, doc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { Address } from '@/types/models';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
@@ -13,24 +12,32 @@ export function AddressesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAddr, setEditingAddr] = useState<Address | null>(null);
 
-  useEffect(() => {
-    fetchAddresses();
-  }, [userProfile?.branchId]);
+  useEffect(() => { fetchAddresses(); }, [userProfile?.branchId]);
 
   const fetchAddresses = async () => {
     if (!userProfile?.branchId) return;
     try {
       setLoading(true);
-      const q = query(collection(db, 'addresses'), where('branchId', '==', userProfile.branchId));
-      const docs = await getDocs(q);
-      const list: Address[] = [];
-      docs.forEach(d => list.push({ addressId: d.id, ...d.data() } as Address));
+      const { data, error: err } = await supabase
+        .from('addresses')
+        .select('*')
+        .eq('branch_id', userProfile.branchId);
+
+      if (err) throw err;
+
+      const list: Address[] = (data ?? []).map(row => ({
+        addressId: row.id,
+        branchId: row.branch_id ?? '',
+        addressText: row.address_text ?? '',
+        latitude: row.latitude ?? undefined,
+        longitude: row.longitude ?? undefined,
+      }));
+
       setAddresses(list);
-    } catch (err) {
+    } catch {
       setError('تعذر جلب العناوين');
     } finally {
       setLoading(false);
@@ -44,7 +51,7 @@ export function AddressesPage() {
       branchId: userProfile.branchId,
       addressText: '',
       latitude: undefined,
-      longitude: undefined
+      longitude: undefined,
     });
     setIsModalOpen(true);
   };
@@ -53,16 +60,39 @@ export function AddressesPage() {
     e.preventDefault();
     if (!editingAddr || !userProfile?.branchId) return;
     try {
-      const { addressId, ...data } = editingAddr;
-      if (addressId) {
-        await updateDoc(doc(db, 'addresses', addressId), data as any);
-        setAddresses(addresses.map(a => a.addressId === addressId ? { ...a, ...data } : a));
+      const payload = {
+        branch_id: userProfile.branchId,
+        address_text: editingAddr.addressText,
+        latitude: editingAddr.latitude ?? null,
+        longitude: editingAddr.longitude ?? null,
+      };
+
+      if (editingAddr.addressId) {
+        const { error: err } = await supabase
+          .from('addresses')
+          .update(payload)
+          .eq('id', editingAddr.addressId);
+        if (err) throw err;
+        setAddresses(addresses.map(a =>
+          a.addressId === editingAddr.addressId ? { ...a, ...editingAddr } : a
+        ));
       } else {
-        const res = await addDoc(collection(db, 'addresses'), data);
-        setAddresses([...addresses, { ...editingAddr, addressId: res.id }]);
+        const { data: newRow, error: err } = await supabase
+          .from('addresses')
+          .insert(payload)
+          .select()
+          .single();
+        if (err) throw err;
+        setAddresses([...addresses, {
+          addressId: newRow.id,
+          branchId: newRow.branch_id ?? '',
+          addressText: newRow.address_text ?? '',
+          latitude: newRow.latitude ?? undefined,
+          longitude: newRow.longitude ?? undefined,
+        }]);
       }
       setIsModalOpen(false);
-    } catch (err) {
+    } catch {
       alert('خطأ أثناء الحفظ');
     }
   };
@@ -77,7 +107,7 @@ export function AddressesPage() {
           <h2 className="text-2xl font-bold text-foreground">إدارة العناوين</h2>
           <p className="text-muted-foreground text-sm">عناوين التوصيل والمواقع المرتبطة بالفرع</p>
         </div>
-        <button 
+        <button
           onClick={openAdd}
           className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-primary/90 transition-colors shadow-sm"
         >
@@ -104,7 +134,7 @@ export function AddressesPage() {
                 )}
               </div>
             </div>
-            <button 
+            <button
               onClick={() => { setEditingAddr(addr); setIsModalOpen(true); }}
               className="text-muted-foreground hover:text-primary p-2 opacity-0 group-hover:opacity-100 transition-all rounded-lg hover:bg-primary/10"
             >
@@ -132,32 +162,32 @@ export function AddressesPage() {
             <form onSubmit={handleSave} className="p-6 space-y-4">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-foreground">العنوان بالتفصيل *</label>
-                <textarea 
+                <textarea
                   required
                   rows={3}
                   className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary bg-background resize-none"
                   value={editingAddr.addressText}
-                  onChange={e => setEditingAddr({...editingAddr, addressText: e.target.value})}
+                  onChange={e => setEditingAddr({ ...editingAddr, addressText: e.target.value })}
                   placeholder="المدينة، الحي، الشارع، المبنى..."
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-foreground">خط العرض (Latitude)</label>
-                  <input 
+                  <input
                     type="number" step="any"
                     className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary bg-background text-left" dir="ltr"
                     value={editingAddr.latitude || ''}
-                    onChange={e => setEditingAddr({...editingAddr, latitude: parseFloat(e.target.value) || undefined})}
+                    onChange={e => setEditingAddr({ ...editingAddr, latitude: parseFloat(e.target.value) || undefined })}
                   />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-foreground">خط الطول (Longitude)</label>
-                  <input 
+                  <input
                     type="number" step="any"
                     className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary bg-background text-left" dir="ltr"
                     value={editingAddr.longitude || ''}
-                    onChange={e => setEditingAddr({...editingAddr, longitude: parseFloat(e.target.value) || undefined})}
+                    onChange={e => setEditingAddr({ ...editingAddr, longitude: parseFloat(e.target.value) || undefined })}
                   />
                 </div>
               </div>

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { Invoice } from '@/types/models';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
@@ -20,34 +19,27 @@ export function InvoicesPage() {
       if (!userProfile?.branchId) return;
       try {
         setLoading(true);
-        // Requires composite index in Firestore for where + orderBy. 
-        // If it fails, we fall back to manual sorting in memory.
-        let docs;
-        try {
-          const q = query(
-            collection(db, 'invoices'),
-            where('branchId', '==', userProfile.branchId),
-            orderBy('createdAt', 'desc')
-          );
-          docs = await getDocs(q);
-        } catch (idxErr) {
-          console.warn("Index missing, falling back to manual sort");
-          const qFallback = query(collection(db, 'invoices'), where('branchId', '==', userProfile.branchId));
-          docs = await getDocs(qFallback);
-        }
-        
-        let list: Invoice[] = [];
-        docs.forEach(d => list.push({ invoiceId: d.id, ...d.data() } as Invoice));
-        
-        // Manual sort fallback
-        list.sort((a, b) => {
-          const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-          const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-          return timeB - timeA;
-        });
+        const { data, error: err } = await supabase
+          .from('invoices')
+          .select('*')
+          .eq('branch_id', userProfile.branchId)
+          .order('created_at', { ascending: false });
+
+        if (err) throw err;
+
+        const list: Invoice[] = (data ?? []).map(row => ({
+          invoiceId: row.id,
+          orderId: row.order_id ?? '',
+          branchId: row.branch_id ?? '',
+          totalAmount: row.total_amount ?? 0,
+          status: row.status ?? 'pending',
+          createdAt: row.created_at ?? '',
+          clientName: row.client_name ?? '',
+          clientType: row.client_type ?? undefined,
+        }));
 
         setInvoices(list);
-      } catch (err) {
+      } catch {
         setError('تعذر جلب الفواتير');
       } finally {
         setLoading(false);
@@ -78,8 +70,8 @@ export function InvoicesPage() {
         </div>
         <div className="relative w-full sm:w-64">
           <Search className="w-4 h-4 absolute right-3 top-3 text-muted-foreground" />
-          <input 
-            type="text" 
+          <input
+            type="text"
             placeholder="بحث برقم الفاتورة أو العميل..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
@@ -110,7 +102,7 @@ export function InvoicesPage() {
                   <td className="px-4 py-3 font-bold text-emerald-600">${inv.totalAmount?.toLocaleString()}</td>
                   <td className="px-4 py-3 text-center"><StatusBadge status={inv.status} type="invoice" /></td>
                   <td className="px-4 py-3 text-left text-muted-foreground text-xs" dir="ltr">
-                    {inv.createdAt?.toDate ? inv.createdAt.toDate().toLocaleDateString('en-GB') : '-'}
+                    {inv.createdAt ? new Date(inv.createdAt).toLocaleDateString('en-GB') : '-'}
                   </td>
                 </tr>
               ))}

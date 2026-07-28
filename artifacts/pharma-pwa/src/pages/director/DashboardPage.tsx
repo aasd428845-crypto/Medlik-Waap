@@ -1,17 +1,16 @@
 import { useEffect, useState } from 'react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { supabase } from '@/lib/supabaseClient';
 import { Link } from 'react-router-dom';
 import { KPICard } from '@/components/KPICard';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { DollarSign, FileText, ShoppingCart, Store, AlertTriangle } from 'lucide-react';
-import { Order, Invoice, WarehouseInventoryItem, Branch } from '@/types/models';
+import { WarehouseInventoryItem } from '@/types/models';
 
 export function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  
+
   const [kpis, setKpis] = useState({
     totalSales: 0,
     receivables: 0,
@@ -25,46 +24,59 @@ export function DashboardPage() {
     async function fetchDashboardData() {
       try {
         setLoading(true);
-        
-        // 1. Total Sales (Orders where status in Invoiced, Delivered)
-        // Wait, instructions say: "totalSales: sum of totalAmount from orders where status=Invoiced or Delivered"
-        // FireStore doesn't do "OR" easily without 'in' operator. We can use 'in' for status.
-        const ordersRef = collection(db, 'orders');
-        const salesQuery = query(ordersRef, where('status', 'in', ['Invoiced', 'Delivered']));
-        const salesDocs = await getDocs(salesQuery);
-        let totalSales = 0;
-        salesDocs.forEach(d => totalSales += (d.data() as Order).totalAmount || 0);
 
-        // Active Orders
-        const activeOrdersQuery = query(ordersRef, where('status', 'in', ['Submitted', 'Allocated', 'PartiallyShipped', 'OutForDelivery']));
-        const activeOrdersDocs = await getDocs(activeOrdersQuery);
-        const activeOrders = activeOrdersDocs.size;
+        // 1. Total Sales
+        const { data: salesData } = await supabase
+          .from('orders')
+          .select('total_amount')
+          .in('status', ['Invoiced', 'Delivered']);
+        const totalSales = (salesData ?? []).reduce((s, r) => s + (r.total_amount ?? 0), 0);
 
-        // 2. Receivables (Invoices where status != 'paid')
-        const invoicesRef = collection(db, 'invoices');
-        const invoicesQuery = query(invoicesRef, where('status', '!=', 'paid'));
-        const invoicesDocs = await getDocs(invoicesQuery);
-        let receivables = 0;
-        invoicesDocs.forEach(d => receivables += (d.data() as Invoice).totalAmount || 0);
+        // 2. Active Orders count
+        const { count: activeOrders } = await supabase
+          .from('orders')
+          .select('*', { count: 'exact', head: true })
+          .in('status', ['Submitted', 'Allocated', 'PartiallyShipped', 'OutForDelivery']);
 
-        // 3. Active Branches
-        const branchesRef = collection(db, 'branches');
-        const branchesDocs = await getDocs(branchesRef);
-        const activeBranches = branchesDocs.size;
+        // 3. Receivables (unpaid invoices)
+        const { data: invoicesData } = await supabase
+          .from('invoices')
+          .select('total_amount')
+          .neq('status', 'paid');
+        const receivables = (invoicesData ?? []).reduce((s, r) => s + (r.total_amount ?? 0), 0);
 
-        setKpis({ totalSales, receivables, activeOrders, activeBranches });
+        // 4. Active Branches
+        const { count: activeBranches } = await supabase
+          .from('branches')
+          .select('*', { count: 'exact', head: true });
 
-        // Critical Inventory
-        const inventoryRef = collection(db, 'warehouse_inventory');
-        const criticalQuery = query(inventoryRef, where('availableQuantity', '<', 10));
-        const criticalDocs = await getDocs(criticalQuery);
-        const critItems: WarehouseInventoryItem[] = [];
-        criticalDocs.forEach(d => critItems.push({ id: d.id, ...d.data() } as WarehouseInventoryItem));
+        setKpis({
+          totalSales,
+          receivables,
+          activeOrders: activeOrders ?? 0,
+          activeBranches: activeBranches ?? 0,
+        });
+
+        // 5. Critical Inventory (qty < 10)
+        const { data: criticalData } = await supabase
+          .from('warehouse_inventory')
+          .select('*')
+          .lt('available_quantity', 10);
+
+        const critItems: WarehouseInventoryItem[] = (criticalData ?? []).map(row => ({
+          id: row.id,
+          sku: row.sku ?? '',
+          name: row.name ?? '',
+          dosageForm: row.dosage_form ?? '',
+          availableQuantity: row.available_quantity ?? 0,
+          expiryDate: row.expiry_date ?? undefined,
+          branchId: row.branch_id ?? '',
+        }));
         setCriticalInventory(critItems);
 
-      } catch (err: any) {
-        console.error("Dashboard Fetch Error", err);
-        setError("تعذر جلب بيانات لوحة التحكم. تأكد من إعدادات قاعدة البيانات.");
+      } catch (err: unknown) {
+        console.error('Dashboard Fetch Error', err);
+        setError('تعذر جلب بيانات لوحة التحكم. تأكد من إعدادات قاعدة البيانات.');
       } finally {
         setLoading(false);
       }
@@ -80,49 +92,49 @@ export function DashboardPage() {
     <div className="space-y-6">
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard 
-          title="إجمالي المبيعات" 
-          value={`$${kpis.totalSales.toLocaleString()}`} 
+        <KPICard
+          title="إجمالي المبيعات"
+          value={`$${kpis.totalSales.toLocaleString()}`}
           icon={<DollarSign className="w-6 h-6" />}
           colorClass="bg-emerald-100 text-emerald-600"
         />
-        <KPICard 
-          title="الذمم المدينة" 
-          value={`$${kpis.receivables.toLocaleString()}`} 
+        <KPICard
+          title="الذمم المدينة"
+          value={`$${kpis.receivables.toLocaleString()}`}
           icon={<FileText className="w-6 h-6" />}
           colorClass="bg-amber-100 text-amber-600"
         />
-        <KPICard 
-          title="الطلبات النشطة" 
-          value={kpis.activeOrders} 
+        <KPICard
+          title="الطلبات النشطة"
+          value={kpis.activeOrders}
           icon={<ShoppingCart className="w-6 h-6" />}
           colorClass="bg-blue-100 text-blue-600"
         />
-        <KPICard 
-          title="الفروع النشطة" 
-          value={kpis.activeBranches} 
+        <KPICard
+          title="الفروع النشطة"
+          value={kpis.activeBranches}
           icon={<Store className="w-6 h-6" />}
           colorClass="bg-purple-100 text-purple-600"
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+
         {/* Quick Access */}
         <div className="space-y-4">
           <h3 className="font-bold text-lg text-foreground flex items-center gap-2">
             وصول سريع
           </h3>
           <div className="grid grid-cols-1 gap-3">
-            <Link 
-              to="/director/catalog" 
+            <Link
+              to="/director/catalog"
               className="bg-card hover:bg-primary/5 border rounded-xl p-6 flex flex-col items-center justify-center gap-3 transition-colors shadow-sm group"
             >
               <div className="text-3xl group-hover:scale-110 transition-transform">💊</div>
               <span className="font-bold text-foreground">إدارة الكتالوج</span>
             </Link>
-            <Link 
-              to="/director/inventory-overview" 
+            <Link
+              to="/director/inventory-overview"
               className="bg-card hover:bg-primary/5 border rounded-xl p-6 flex flex-col items-center justify-center gap-3 transition-colors shadow-sm group"
             >
               <div className="bg-primary/10 p-3 rounded-full text-primary group-hover:scale-110 transition-transform">
@@ -139,7 +151,7 @@ export function DashboardPage() {
             <AlertTriangle className="w-5 h-5 text-amber-500" />
             التنبيهات العاجلة
           </h3>
-          
+
           <div className="space-y-3">
             {/* Critical Inventory Alert */}
             {criticalInventory.length > 0 ? (
@@ -194,7 +206,6 @@ export function DashboardPage() {
               </p>
             </div>
           </div>
-
         </div>
       </div>
     </div>
