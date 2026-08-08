@@ -1,5 +1,4 @@
 export type UserRole = 'client' | 'branch_manager' | 'company_director' | 'driver';
-
 export interface User {
   userId: string;
   name: string;
@@ -54,7 +53,7 @@ export interface Order {
   parentOrderId?: string;
   scheduledDeliveryDate?: string;
   totalAmount: number;
-  createdAt: any; // Firestore Timestamp
+  createdAt: any; // Supabase timestamptz (ISO string)
 }
 
 export interface Invoice {

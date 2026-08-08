@@ -2,21 +2,14 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { LoginPage } from '@/pages/LoginPage';
 import { DirectorLayout } from '@/layouts/DirectorLayout';
-import { BranchManagerLayout } from '@/layouts/BranchManagerLayout';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 
 // Director Pages
 import { DashboardPage } from '@/pages/director/DashboardPage';
+import { BranchManagersPage } from '@/pages/director/BranchManagersPage';
 import { CatalogPage } from '@/pages/director/CatalogPage';
 import { InventoryOverviewPage } from '@/pages/director/InventoryOverviewPage';
 import { OrdersMonitoringPage } from '@/pages/director/OrdersMonitoringPage';
-
-// Branch Pages
-import { AllocationPage } from '@/pages/branch/AllocationPage';
-import { InvoicesPage } from '@/pages/branch/InvoicesPage';
-import { OffersPage } from '@/pages/branch/OffersPage';
-import { WarehouseInventoryPage } from '@/pages/branch/WarehouseInventoryPage';
-import { AddressesPage } from '@/pages/branch/AddressesPage';
 
 function ProtectedRoute({ allowedRoles }: { allowedRoles: string[] }) {
   const { userProfile, loading } = useAuth();
@@ -41,10 +34,9 @@ function ProtectedRoute({ allowedRoles }: { allowedRoles: string[] }) {
 function RootRedirect() {
   const { userProfile, loading } = useAuth();
   if (loading) return <div className="h-screen flex items-center justify-center"><LoadingSpinner /></div>;
-  
+
   if (userProfile?.role === 'company_director') return <Navigate to="/director/dashboard" replace />;
-  if (userProfile?.role === 'branch_manager') return <Navigate to="/branch/allocation" replace />;
-  
+
   return <Navigate to="/login" replace />;
 }
 
@@ -61,6 +53,7 @@ function App() {
           <Route path="/director" element={<ProtectedRoute allowedRoles={['company_director']} />}>
             <Route element={<DirectorLayout />}>
               <Route path="dashboard" element={<DashboardPage />} />
+              <Route path="branch-managers" element={<BranchManagersPage />} />
               <Route path="catalog" element={<CatalogPage />} />
               <Route path="inventory-overview" element={<InventoryOverviewPage />} />
               <Route path="orders-monitoring" element={<OrdersMonitoringPage />} />
@@ -68,18 +61,6 @@ function App() {
             </Route>
           </Route>
 
-          {/* Branch Manager Routes */}
-          <Route path="/branch" element={<ProtectedRoute allowedRoles={['branch_manager']} />}>
-            <Route element={<BranchManagerLayout />}>
-              <Route path="allocation" element={<AllocationPage />} />
-              <Route path="invoices" element={<InvoicesPage />} />
-              <Route path="offers" element={<OffersPage />} />
-              <Route path="inventory" element={<WarehouseInventoryPage />} />
-              <Route path="addresses" element={<AddressesPage />} />
-              <Route path="" element={<Navigate to="allocation" replace />} />
-            </Route>
-          </Route>
-          
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

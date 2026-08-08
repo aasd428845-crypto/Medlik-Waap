@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Pill, LayoutDashboard, Database, Activity, LayoutList, LogOut, Eye } from 'lucide-react';
+import { Pill, LayoutDashboard, Users, Database, Activity, LayoutList, LogOut } from 'lucide-react';
 
 export function DirectorLayout() {
   const { userProfile, logout } = useAuth();
@@ -8,6 +8,7 @@ export function DirectorLayout() {
 
   const getPageTitle = () => {
     if (location.pathname.includes('dashboard')) return 'لوحة التحكم';
+    if (location.pathname.includes('branch-managers')) return 'إدارة حسابات مدراء الفروع';
     if (location.pathname.includes('catalog')) return 'كتالوج المنتجات';
     if (location.pathname.includes('inventory-overview')) return 'نظرة المخزون';
     if (location.pathname.includes('orders-monitoring')) return 'مراقبة الطلبات';
@@ -16,23 +17,14 @@ export function DirectorLayout() {
 
   const navItems = [
     { to: '/director/dashboard', label: 'لوحة التحكم', icon: LayoutDashboard },
+    { to: '/director/branch-managers', label: 'مدراء الفروع', icon: Users },
     { to: '/director/catalog', label: 'كتالوج المنتجات', icon: Database },
     { to: '/director/inventory-overview', label: 'نظرة المخزون', icon: Activity },
     { to: '/director/orders-monitoring', label: 'مراقبة الطلبات', icon: LayoutList },
   ];
 
-  const { isPreviewMode } = useAuth();
-
   return (
     <div className="flex flex-col h-screen">
-      {/* Preview mode banner */}
-      {isPreviewMode && (
-        <div className="bg-amber-400 text-amber-900 text-xs font-bold text-center py-1.5 px-4 flex items-center justify-center gap-2 shrink-0 z-50">
-          <Eye className="w-3.5 h-3.5" />
-          وضع المعاينة المؤقتة — البيانات وهمية ولا تتصل بـ Firebase
-          <Eye className="w-3.5 h-3.5" />
-        </div>
-      )}
       <div className="flex flex-1 bg-muted/20 overflow-hidden">
       {/* Sidebar */}
       <aside className="w-64 bg-sidebar border-l border-sidebar-border flex flex-col hidden md:flex shrink-0">
