@@ -22,5 +22,5 @@ timeoutMs = 20000
 [userenv]
 
 [userenv.shared]
-VITE_SUPABASE_ANON_KEY = "sb_publishable_EqtJ203upZidqltX3zQHKQ_EONcs_Wg"
-VITE_SUPABASE_URL = "https://akvlcblgmkcyouwifbcd.supabase.co"
+VITE_SUPABASE_ANON_KEY = "sb_publishable_yxm5GTZm87Y3wQwi019lXQ_IMLplZQc"
+VITE_SUPABASE_URL = "https://lmkomzqioneuyvatzsov.supabase.co"
