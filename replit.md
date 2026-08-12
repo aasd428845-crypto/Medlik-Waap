@@ -11,25 +11,21 @@
 
 - **Frontend**: React 19 + TypeScript + Vite
 - **Styling**: Tailwind CSS + مكتبة shadcn/ui، خط Cairo (Google Fonts)، RTL عربي كامل
-- **Backend**: Firebase (Firestore + Auth) — متصل بنفس مشروع Firebase الخاص بتطبيق Android
+- **Backend**: Supabase (Postgres + Auth + Edge Functions) — متصل بنفس مشروع Supabase الخاص بتطبيق Flutter
 - **PWA**: vite-plugin-pwa — Service Worker + Web Manifest
 - **Routing**: react-router-dom v7
 
 ## متغيرات البيئة المطلوبة (Secrets)
 
 يجب ضبط هذه الأسرار في إعدادات Replit Secrets:
-- `VITE_FIREBASE_API_KEY`
-- `VITE_FIREBASE_AUTH_DOMAIN`
-- `VITE_FIREBASE_PROJECT_ID`
-- `VITE_FIREBASE_STORAGE_BUCKET`
-- `VITE_FIREBASE_MESSAGING_SENDER_ID`
-- `VITE_FIREBASE_APP_ID`
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
 
 ## بنية الملفات
 
 ```
 artifacts/pharma-pwa/src/
-├── lib/firebase.ts          — إعداد Firebase (يقرأ من VITE_FIREBASE_* env vars)
+├── lib/supabaseClient.ts    — إعداد Supabase (يقرأ من VITE_SUPABASE_* env vars)
 ├── types/models.ts          — نماذج البيانات TypeScript
 ├── contexts/AuthContext.tsx — سياق المصادقة + حماية الأدوار
 ├── pages/

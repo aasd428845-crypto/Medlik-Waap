@@ -60,7 +60,7 @@ export async function createBranchManager(input: {
   email: string;
   phone?: string;
   password: string;
-  branchId?: string;
+  branchId: string;
 }) {
   return invokeFunction({
     action: 'create',
@@ -68,7 +68,7 @@ export async function createBranchManager(input: {
     email: input.email,
     phone: input.phone ?? '',
     password: input.password,
-    branchId: input.branchId || undefined,
+    branchId: input.branchId,
   });
 }
 
@@ -90,6 +90,7 @@ function translateError(raw: string): string {
     'Director profile not found': 'لم يتم العثور على ملف المدير',
     'name, email, and password are required': 'الاسم والبريد الإلكتروني وكلمة المرور مطلوبة',
     'Password must be at least 6 characters': 'كلمة المرور يجب أن تكون 6 أحرف على الأقل',
+    'branchId is required': 'يجب اختيار الفرع قبل إنشاء الحساب',
     'Branch not found': 'الفرع المحدد غير موجود',
     'Branch manager not found': 'مدير الفرع غير موجود',
     'managerId and status (active|suspended) required': 'بيانات غير مكتملة',

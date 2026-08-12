@@ -74,8 +74,8 @@ export function BranchManagersPage() {
   };
 
   const branchNameOf = (m: BranchManagerRow): string =>
-    (m.branch_name as string) ??
-    (branches.find((b) => b.id === m.branch_id)?.name as string) ??
+    (m.branch_name as string) ||
+    (branches.find((b) => b.id === m.branch_id)?.name as string) ||
     '—';
 
   const filtered = managers.filter((m) => {
@@ -91,6 +91,10 @@ export function BranchManagersPage() {
 
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!createForm.branchId) {
+      alert('يرجى اختيار الفرع الذي سيتولى المدير إدارته.');
+      return;
+    }
     setCreateBusy(true);
     try {
       await createBranchManager({
@@ -98,7 +102,7 @@ export function BranchManagersPage() {
         email: createForm.email,
         phone: createForm.phone,
         password: createForm.password,
-        branchId: createForm.branchId || undefined,
+        branchId: createForm.branchId,
       });
       setIsCreateOpen(false);
       setCreateForm(EMPTY_FORM);
@@ -321,19 +325,26 @@ export function BranchManagersPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium">الفرع</label>
+                  <label className="text-sm font-medium">الفرع *</label>
                   <select
+                    required
+                    disabled={branches.length === 0 || createBusy}
                     className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
                     value={createForm.branchId}
                     onChange={(e) => setCreateForm({ ...createForm, branchId: e.target.value })}
                   >
-                    <option value="">بدون فرع</option>
+                    <option value="" disabled>اختر الفرع</option>
                     {branches.map((b) => (
                       <option key={b.id} value={b.id}>
                         {b.name}{b.governorate ? ` — ${b.governorate}` : ''}
                       </option>
                     ))}
                   </select>
+                  {branches.length === 0 && (
+                    <p className="text-xs text-amber-700">
+                      لا توجد فروع مسجلة في قاعدة البيانات. أضف فرعاً في جدول الفروع ثم أعد تحميل الصفحة.
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="space-y-1.5">

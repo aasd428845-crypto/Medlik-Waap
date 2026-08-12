@@ -54,11 +54,11 @@ export function OrdersMonitoringPage() {
 
       const { data: bData, error: bErr } = await supabase
         .from('branches')
-        .select('id, branch_name, governorate, latitude, longitude');
+          .select('id, name, governorate, latitude, longitude');
       if (bErr) throw bErr;
       setBranches((bData ?? []).map(row => ({
         branchId: row.id,
-        branchName: row.branch_name ?? '',
+        branchName: row.name ?? '',
         governorate: row.governorate ?? '',
         latitude: row.latitude ?? 0,
         longitude: row.longitude ?? 0,

@@ -83,18 +83,19 @@ serve(async (req) => {
       if (password.length < 6) {
         return respond({ error: "Password must be at least 6 characters" }, 400);
       }
+      if (!branchId) {
+        return respond({ error: "branchId is required" }, 400);
+      }
 
       // Verify the chosen branch exists and resolve its name for display
       let branchName: string | null = null;
-      if (branchId) {
-        const { data: branch, error: branchErr } = await admin
-          .from("branches")
-          .select("name")
-          .eq("id", branchId)
-          .single();
-        if (branchErr || !branch) return respond({ error: "Branch not found" }, 400);
-        branchName = branch.name;
-      }
+      const { data: branch, error: branchErr } = await admin
+        .from("branches")
+        .select("name")
+        .eq("id", branchId)
+        .single();
+      if (branchErr || !branch) return respond({ error: "Branch not found" }, 400);
+      branchName = branch.name;
 
       // Create auth user — handle_new_user trigger will insert into public.users
       const { data: created, error: createErr } = await admin.auth.admin.createUser({
@@ -104,7 +105,9 @@ serve(async (req) => {
           name,
           phone: phone ?? "",
           role: "branch_manager",
-          ...(branchName ? { branch_name: branchName } : {}),
+          branch_id: branchId,
+          branch_name: branchName,
+          requires_password_change: true,
         },
         email_confirm: true,
       });
@@ -112,24 +115,47 @@ serve(async (req) => {
 
       const managerId = created.user!.id;
 
-      // Small delay so the trigger row is ready before we update it
-      await new Promise((r) => setTimeout(r, 600));
+      // The auth trigger and the Edge Function run independently. Retry until
+      // the profile row exists, then verify the update returned the expected
+      // role, branch, and active status. An UPDATE with zero matching rows can
+      // otherwise report no error and leave Flutter with a pending/unassigned
+      // profile.
+      let profileReady = false;
+      let lastUpdateError: string | null = null;
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        const { data: profile, error: updErr } = await admin
+          .from("users")
+          .update({
+            branch_id: branchId,
+            branch_name: branchName,
+            account_status: "active",
+            requires_password_change: true,
+          })
+          .eq("id", managerId)
+          .select("id, role, branch_id, branch_name, account_status, requires_password_change")
+          .maybeSingle();
 
-      // Bind branch, activate immediately, and flag password change
-      const { error: updErr } = await admin
-        .from("users")
-        .update({
-          ...(branchId ? { branch_id: branchId } : {}),
-          ...(branchName ? { branch_name: branchName } : {}),
-          account_status: "active",
-          requires_password_change: true,
-        })
-        .eq("id", managerId);
+        if (updErr) {
+          lastUpdateError = updErr.message;
+        } else if (
+          profile?.id === managerId &&
+          profile.role === "branch_manager" &&
+          profile.branch_id === branchId &&
+          profile.branch_name === branchName &&
+          profile.account_status === "active" &&
+          profile.requires_password_change === true
+        ) {
+          profileReady = true;
+          break;
+        }
 
-      if (updErr) {
+        await new Promise((r) => setTimeout(r, 300));
+      }
+
+      if (!profileReady) {
         // Best-effort rollback
         await admin.auth.admin.deleteUser(managerId);
-        return respond({ error: updErr.message }, 500);
+        return respond({ error: lastUpdateError ?? "Unable to initialize manager profile" }, 500);
       }
 
       return respond({ success: true, userId: managerId });
