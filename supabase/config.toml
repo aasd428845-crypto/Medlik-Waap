@@ -1,0 +1,7 @@
+project_id = "lmkomzqioneuyvatzsov"
+
+[functions.manage-branch-manager-account]
+verify_jwt = true
+
+[functions.manage-client-account]
+verify_jwt = true

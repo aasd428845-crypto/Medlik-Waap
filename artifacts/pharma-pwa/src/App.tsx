@@ -7,9 +7,19 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
 // Director Pages
 import { DashboardPage } from '@/pages/director/DashboardPage';
 import { BranchManagersPage } from '@/pages/director/BranchManagersPage';
+import { PendingClientsPage } from '@/pages/director/PendingClientsPage';
+import { DriversPage } from '@/pages/director/DriversPage';
+import { ItemAnalyticsPage } from '@/pages/director/ItemAnalyticsPage';
 import { CatalogPage } from '@/pages/director/CatalogPage';
 import { InventoryOverviewPage } from '@/pages/director/InventoryOverviewPage';
 import { OrdersMonitoringPage } from '@/pages/director/OrdersMonitoringPage';
+import { PromotionalOffersPage } from '@/pages/director/PromotionalOffersPage';
+import { NewPromotionalOfferPage } from '@/pages/director/NewPromotionalOfferPage';
+import { EditPromotionalOfferPage } from '@/pages/director/EditPromotionalOfferPage';
+import { BonusOverviewPage } from '@/pages/director/BonusOverviewPage';
+import { BonusRulesPage } from '@/pages/director/BonusRulesPage';
+import { NewBonusRulePage } from '@/pages/director/NewBonusRulePage';
+import { EditBonusRulePage } from '@/pages/director/EditBonusRulePage';
 
 function ProtectedRoute({ allowedRoles }: { allowedRoles: string[] }) {
   const { userProfile, loading } = useAuth();
@@ -54,9 +64,19 @@ function App() {
             <Route element={<DirectorLayout />}>
               <Route path="dashboard" element={<DashboardPage />} />
               <Route path="branch-managers" element={<BranchManagersPage />} />
+              <Route path="pending-clients" element={<PendingClientsPage />} />
+              <Route path="drivers" element={<DriversPage />} />
+              <Route path="item-analytics" element={<ItemAnalyticsPage />} />
               <Route path="catalog" element={<CatalogPage />} />
               <Route path="inventory-overview" element={<InventoryOverviewPage />} />
               <Route path="orders-monitoring" element={<OrdersMonitoringPage />} />
+              <Route path="promotional-offers" element={<PromotionalOffersPage />} />
+              <Route path="promotional-offers/new" element={<NewPromotionalOfferPage />} />
+              <Route path="promotional-offers/:id/edit" element={<EditPromotionalOfferPage />} />
+              <Route path="bonus-overview" element={<BonusOverviewPage />} />
+              <Route path="bonus-rules" element={<BonusRulesPage />} />
+              <Route path="bonus-rules/new" element={<NewBonusRulePage />} />
+              <Route path="bonus-rules/:id/edit" element={<EditBonusRulePage />} />
               <Route path="" element={<Navigate to="dashboard" replace />} />
             </Route>
           </Route>

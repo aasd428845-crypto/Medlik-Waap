@@ -76,6 +76,19 @@ export async function updateBranchManagerStatus(managerId: string, status: 'acti
   return invokeFunction({ action: 'update_status', managerId, status });
 }
 
+export async function updateBranchManagerProfile(
+  managerId: string,
+  input: { name: string; phone?: string; branchId: string },
+) {
+  return invokeFunction({
+    action: 'update_profile',
+    managerId,
+    name: input.name,
+    phone: input.phone ?? '',
+    branchId: input.branchId,
+  });
+}
+
 export async function resetBranchManagerPassword(managerId: string, newPassword: string) {
   return invokeFunction({ action: 'reset_password', managerId, newPassword });
 }
@@ -94,6 +107,8 @@ function translateError(raw: string): string {
     'Branch not found': 'الفرع المحدد غير موجود',
     'Branch manager not found': 'مدير الفرع غير موجود',
     'managerId and status (active|suspended) required': 'بيانات غير مكتملة',
+    'managerId is required': 'بيانات غير مكتملة',
+    'Nothing to update': 'لا توجد بيانات للتعديل',
     'managerId and newPassword (≥6 chars) required':
       'كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل',
     'Email already registered': 'البريد الإلكتروني مسجل مسبقاً',

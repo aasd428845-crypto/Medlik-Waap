@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Search, Plus, Users, KeyRound, CheckCircle, XCircle, ShieldCheck, ShieldOff } from 'lucide-react';
+import { Search, Plus, Users, KeyRound, CheckCircle, XCircle, ShieldCheck, ShieldOff, Pencil } from 'lucide-react';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -8,6 +8,7 @@ import {
   listBranches,
   createBranchManager,
   updateBranchManagerStatus,
+  updateBranchManagerProfile,
   resetBranchManagerPassword,
   type BranchManagerRow,
   type BranchRow,
@@ -43,6 +44,14 @@ export function BranchManagersPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState<CreateForm>(EMPTY_FORM);
   const [createBusy, setCreateBusy] = useState(false);
+
+  const [editTarget, setEditTarget] = useState<BranchManagerRow | null>(null);
+  const [editForm, setEditForm] = useState<{ name: string; phone: string; branchId: string }>({
+    name: '',
+    phone: '',
+    branchId: '',
+  });
+  const [editBusy, setEditBusy] = useState(false);
 
   const [statusTarget, setStatusTarget] = useState<BranchManagerRow | null>(null);
   const [statusBusy, setStatusBusy] = useState(false);
@@ -129,6 +138,53 @@ export function BranchManagersPage() {
     } finally {
       setStatusBusy(false);
       setStatusTarget(null);
+    }
+  };
+
+  const openEditModal = (m: BranchManagerRow) => {
+    setEditTarget(m);
+    setEditForm({
+      name: m.name ?? '',
+      phone: m.phone ?? '',
+      branchId: m.branch_id ?? '',
+    });
+  };
+
+  const handleEditSave = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editTarget) return;
+    if (!editForm.name.trim()) {
+      alert('يرجى إدخال اسم المدير.');
+      return;
+    }
+    if (!editForm.branchId) {
+      alert('يرجى اختيار الفرع الذي يديره المدير.');
+      return;
+    }
+    setEditBusy(true);
+    try {
+      await updateBranchManagerProfile(editTarget.id, editForm);
+      const branchName =
+        branches.find((b) => b.id === editForm.branchId)?.name ?? editTarget.branch_name ?? '';
+      setManagers((prev) =>
+        prev.map((x) =>
+          x.id === editTarget.id
+            ? {
+                ...x,
+                name: editForm.name,
+                phone: editForm.phone,
+                branch_id: editForm.branchId,
+                branch_name: branchName,
+              }
+            : x,
+        ),
+      );
+      setEditTarget(null);
+      showSuccess('تم تحديث بيانات مدير الفرع بنجاح.');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء تحديث البيانات');
+    } finally {
+      setEditBusy(false);
     }
   };
 
@@ -240,21 +296,36 @@ export function BranchManagersPage() {
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-2">
                           <button
+                            onClick={() => openEditModal(m)}
+                            disabled={statusBusy || editBusy}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors disabled:opacity-50"
+                            title="تعديل البيانات"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                            تعديل
+                          </button>
+                          <button
                             onClick={() => setStatusTarget(m)}
-                            disabled={statusBusy}
-                            className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50"
+                            disabled={statusBusy || editBusy}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50"
                             title={m.account_status === 'active' ? 'إيقاف الحساب' : 'تفعيل الحساب'}
                           >
                             {m.account_status === 'active' ? (
-                              <XCircle className="w-4 h-4 text-red-600" />
+                              <>
+                                <XCircle className="w-3.5 h-3.5 text-red-600" />
+                                <span className="text-red-700">إيقاف</span>
+                              </>
                             ) : (
-                              <CheckCircle className="w-4 h-4 text-emerald-600" />
+                              <>
+                                <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                                <span className="text-emerald-700">تفعيل</span>
+                              </>
                             )}
                           </button>
                           <button
                             onClick={() => { setResetTarget(m); setNewPassword(''); }}
-                            disabled={statusBusy}
-                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors disabled:opacity-50"
+                            disabled={statusBusy || editBusy}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors disabled:opacity-50"
                             title="إعادة تعيين كلمة المرور"
                           >
                             <KeyRound className="w-4 h-4" />
@@ -377,6 +448,94 @@ export function BranchManagersPage() {
                   className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-60"
                 >
                   {createBusy ? 'جارٍ الإنشاء...' : 'إنشاء الحساب'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit manager modal */}
+      {editTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-card rounded-xl shadow-xl w-full max-w-lg my-8 animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b flex justify-between items-center bg-muted/20">
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                <Pencil className="w-5 h-5 text-primary" />
+                تعديل بيانات مدير الفرع
+              </h3>
+              <button onClick={() => setEditTarget(null)} className="text-muted-foreground hover:text-foreground">
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+            <form onSubmit={handleEditSave} className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">البريد الإلكتروني</label>
+                <input
+                  type="email"
+                  dir="ltr"
+                  disabled
+                  className="w-full border rounded-lg px-3 py-2 text-sm bg-muted/30 text-left text-muted-foreground"
+                  value={editTarget.email}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">اسم المدير *</label>
+                <input
+                  required
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  placeholder="مثال: أحمد محمد"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">رقم الهاتف</label>
+                <input
+                  dir="ltr"
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary text-left"
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                  placeholder="7XXXXXXXX"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">الفرع *</label>
+                <select
+                  required
+                  disabled={branches.length === 0 || editBusy}
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                  value={editForm.branchId}
+                  onChange={(e) => setEditForm({ ...editForm, branchId: e.target.value })}
+                >
+                  <option value="" disabled>اختر الفرع</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}{b.governorate ? ` — ${b.governorate}` : ''}
+                    </option>
+                  ))}
+                </select>
+                {branches.length === 0 && (
+                  <p className="text-xs text-amber-700">
+                    لا توجد فروع مسجلة في قاعدة البيانات. أضف فرعاً في جدول الفروع ثم أعد تحميل الصفحة.
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3 pt-4 border-t">
+                <button
+                  type="button"
+                  onClick={() => setEditTarget(null)}
+                  className="px-4 py-2 text-sm font-medium border rounded-lg hover:bg-muted"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  disabled={editBusy}
+                  className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-60"
+                >
+                  {editBusy ? 'جارٍ الحفظ...' : 'حفظ التعديلات'}
                 </button>
               </div>
             </form>

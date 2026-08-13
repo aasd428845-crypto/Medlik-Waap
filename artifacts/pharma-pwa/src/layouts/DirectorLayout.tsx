@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Pill, LayoutDashboard, Users, Database, Activity, LayoutList, LogOut } from 'lucide-react';
+import { Pill, LayoutDashboard, Users, UserCheck, Truck, BarChart3, Database, Activity, LayoutList, BadgePercent, Gift, LogOut } from 'lucide-react';
 
 export function DirectorLayout() {
   const { userProfile, logout } = useAuth();
@@ -9,18 +9,28 @@ export function DirectorLayout() {
   const getPageTitle = () => {
     if (location.pathname.includes('dashboard')) return 'لوحة التحكم';
     if (location.pathname.includes('branch-managers')) return 'إدارة حسابات مدراء الفروع';
+    if (location.pathname.includes('pending-clients')) return 'طلبات الانضمام المعلّقة';
+    if (location.pathname.includes('drivers')) return 'السائقون';
+    if (location.pathname.includes('item-analytics')) return 'تحليلات الأصناف';
     if (location.pathname.includes('catalog')) return 'كتالوج المنتجات';
     if (location.pathname.includes('inventory-overview')) return 'نظرة المخزون';
     if (location.pathname.includes('orders-monitoring')) return 'مراقبة الطلبات';
+    if (location.pathname.includes('promotional-offers')) return 'العروض الترويجية';
+    if (location.pathname.includes('bonus')) return 'نظام البونص';
     return 'لوحة التحكم';
   };
 
   const navItems = [
     { to: '/director/dashboard', label: 'لوحة التحكم', icon: LayoutDashboard },
     { to: '/director/branch-managers', label: 'مدراء الفروع', icon: Users },
+    { to: '/director/pending-clients', label: 'طلبات الانضمام', icon: UserCheck },
+    { to: '/director/drivers', label: 'السائقون', icon: Truck },
+    { to: '/director/item-analytics', label: 'تحليلات الأصناف', icon: BarChart3 },
     { to: '/director/catalog', label: 'كتالوج المنتجات', icon: Database },
     { to: '/director/inventory-overview', label: 'نظرة المخزون', icon: Activity },
     { to: '/director/orders-monitoring', label: 'مراقبة الطلبات', icon: LayoutList },
+    { to: '/director/promotional-offers', label: 'العروض الترويجية', icon: BadgePercent },
+    { to: '/director/bonus-overview', label: 'نظام البونص', icon: Gift },
   ];
 
   return (

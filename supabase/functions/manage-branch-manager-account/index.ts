@@ -228,6 +228,71 @@ serve(async (req) => {
       return respond({ success: true });
     }
 
+    // ── UPDATE PROFILE (name / phone / branch) ──────────────────────────
+    if (action === "update_profile") {
+      const { managerId, name, phone, branchId } = body as {
+        managerId?: string;
+        name?: string;
+        phone?: string;
+        branchId?: string;
+      };
+      if (!managerId) return respond({ error: "managerId is required" }, 400);
+
+      // Verify target is a branch manager
+      const { data: mgr, error: mgrErr } = await admin
+        .from("users")
+        .select("id, role")
+        .eq("id", managerId)
+        .single();
+      if (mgrErr || mgr?.role !== "branch_manager") {
+        return respond({ error: "Branch manager not found" }, 403);
+      }
+
+      const updates: Record<string, unknown> = {};
+      if (typeof name === "string" && name.trim()) {
+        updates.name = name.trim();
+      }
+      if (typeof phone === "string") {
+        updates.phone = phone.trim();
+      }
+      if (typeof branchId === "string" && branchId) {
+        // Verify the chosen branch exists and resolve its name for display
+        const { data: branch, error: branchErr } = await admin
+          .from("branches")
+          .select("name")
+          .eq("id", branchId)
+          .single();
+        if (branchErr || !branch) return respond({ error: "Branch not found" }, 400);
+        updates.branch_id = branchId;
+        updates.branch_name = branch.name;
+      }
+
+      if (Object.keys(updates).length === 0) {
+        return respond({ error: "Nothing to update" }, 400);
+      }
+
+      const { error: updErr } = await admin
+        .from("users")
+        .update(updates)
+        .eq("id", managerId);
+      if (updErr) return respond({ error: updErr.message }, 500);
+
+      // Keep auth user_metadata in sync so the Flutter apps see the same fields
+      const { data: authUser } = await admin.auth.admin.getUserById(managerId);
+      if (authUser?.user) {
+        const meta: Record<string, unknown> = {
+          ...(authUser.user.user_metadata ?? {}),
+        };
+        if ("name" in updates) meta.name = updates.name;
+        if ("phone" in updates) meta.phone = updates.phone;
+        if ("branch_id" in updates) meta.branch_id = updates.branch_id;
+        if ("branch_name" in updates) meta.branch_name = updates.branch_name;
+        await admin.auth.admin.updateUserById(managerId, { user_metadata: meta });
+      }
+
+      return respond({ success: true });
+    }
+
     return respond({ error: `Unknown action: ${action}` }, 400);
   } catch (err) {
     return respond({ error: String(err) }, 500);
