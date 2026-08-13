@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Pill, LayoutDashboard, Users, UserCheck, Truck, BarChart3, Database, Activity, LayoutList, BadgePercent, Gift, LogOut } from 'lucide-react';
+import { Pill, LayoutDashboard, Users, UserCheck, Truck, BarChart3, Database, Activity, LayoutList, BadgePercent, Gift, AlarmClock, Wallet, LogOut } from 'lucide-react';
 
 export function DirectorLayout() {
   const { userProfile, logout } = useAuth();
@@ -17,6 +17,8 @@ export function DirectorLayout() {
     if (location.pathname.includes('orders-monitoring')) return 'مراقبة الطلبات';
     if (location.pathname.includes('promotional-offers')) return 'العروض الترويجية';
     if (location.pathname.includes('bonus')) return 'نظام البونص';
+    if (location.pathname.includes('expiry-alerts')) return 'تنبيهات انتهاء الصلاحية';
+    if (location.pathname.includes('receivables')) return 'الذمم المدينة';
     return 'لوحة التحكم';
   };
 
@@ -31,6 +33,8 @@ export function DirectorLayout() {
     { to: '/director/orders-monitoring', label: 'مراقبة الطلبات', icon: LayoutList },
     { to: '/director/promotional-offers', label: 'العروض الترويجية', icon: BadgePercent },
     { to: '/director/bonus-overview', label: 'نظام البونص', icon: Gift },
+    { to: '/director/expiry-alerts', label: 'انتهاء الصلاحية', icon: AlarmClock },
+    { to: '/director/receivables', label: 'الذمم المدينة', icon: Wallet },
   ];
 
   return (
