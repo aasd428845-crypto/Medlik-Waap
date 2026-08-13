@@ -1,0 +1,16 @@
+-- =============================================================
+-- Migration 0002 — المرحلة 2: السائقون + تحليلات الأصناف
+-- مشروع ويب Medlik-Waap (لوحة تحكم المدير العام)
+--
+-- ✅ مرحلة قراءة فقط (no writes) — لا يوجد أي تعديل على مخطط
+--    قاعدة البيانات في هذه المرحلة، ولا حاجة لأي Edge Function
+--    جديدة أو نشر أي دالة.
+--
+-- الأعمدة المستخدمة (موجودة مسبقاً من migrations مشروع Flutter):
+--   users:       id, name, email, phone, role, branch_id,
+--                branch_name, account_status, created_at
+--   orders:      id, status, assigned_driver_id, created_at
+--   order_items: order_id, product_id, quantity, created_at
+--   products:    id, name, unit, is_active
+--   inventory:   branch_id, product_id, quantity
+-- =============================================================
