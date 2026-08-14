@@ -22,6 +22,7 @@ import { NewBonusRulePage } from '@/pages/director/NewBonusRulePage';
 import { EditBonusRulePage } from '@/pages/director/EditBonusRulePage';
 import { ExpiryAlertsPage } from '@/pages/director/ExpiryAlertsPage';
 import { ReceivablesPage } from '@/pages/director/ReceivablesPage';
+import { SendNotificationPage } from '@/pages/director/SendNotificationPage';
 
 function ProtectedRoute({ allowedRoles }: { allowedRoles: string[] }) {
   const { userProfile, loading } = useAuth();
@@ -81,6 +82,7 @@ function App() {
               <Route path="bonus-rules/:id/edit" element={<EditBonusRulePage />} />
               <Route path="expiry-alerts" element={<ExpiryAlertsPage />} />
               <Route path="receivables" element={<ReceivablesPage />} />
+              <Route path="send-notification" element={<SendNotificationPage />} />
               <Route path="" element={<Navigate to="dashboard" replace />} />
             </Route>
           </Route>

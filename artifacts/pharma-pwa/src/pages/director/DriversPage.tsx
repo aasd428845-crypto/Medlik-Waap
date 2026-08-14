@@ -27,7 +27,7 @@ export function DriversPage() {
       setLeastCovered(data.leastCovered);
     } catch (err) {
       console.error(err);
-      setError('تعذر جلب بيانات السائقين. تأكد من تسجيل الدخول.');
+      setError('تعذر جلب بيانات المندوبين. تأكد من تسجيل الدخول.');
     } finally {
       setLoading(false);
     }
@@ -38,9 +38,9 @@ export function DriversPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-foreground">السائقون</h2>
+        <h2 className="text-2xl font-bold text-foreground">المندوبون</h2>
         <p className="text-muted-foreground text-sm">
-          سائقو التوصيل مجمّعون حسب الفرع، مع عدد الطلبات المكتملة لكل سائق.
+          مندوبو التوصيل مجمّعون حسب الفرع، مع عدد الطلبات المكتملة لكل مندوب.
         </p>
       </div>
 
@@ -52,7 +52,7 @@ export function DriversPage() {
           </div>
           <div>
             <p className="text-3xl font-bold text-foreground">{totalDrivers}</p>
-            <p className="text-sm text-muted-foreground">إجمالي السائقين بالشركة</p>
+            <p className="text-sm text-muted-foreground">إجمالي المندوبين بالشركة</p>
           </div>
         </div>
         <div className="bg-card border rounded-xl shadow-sm p-5 flex items-center gap-4">
@@ -61,7 +61,7 @@ export function DriversPage() {
           </div>
           <div>
             <p className="text-3xl font-bold text-foreground">{totalActive}</p>
-            <p className="text-sm text-muted-foreground">سائقون نشطون</p>
+            <p className="text-sm text-muted-foreground">مندوبون نشطون</p>
           </div>
         </div>
         <div className="bg-card border rounded-xl shadow-sm p-5 flex items-center gap-4">
@@ -73,7 +73,7 @@ export function DriversPage() {
               {leastCovered ? leastCovered.branchName : '—'}
             </p>
             <p className="text-sm text-muted-foreground">
-              أقل فرع تغطية ({leastCovered?.activeCount ?? 0} سائق نشط)
+              أقل فرع تغطية ({leastCovered?.activeCount ?? 0} مندوب نشط)
             </p>
           </div>
         </div>
@@ -107,7 +107,7 @@ export function DriversPage() {
                 <table className="w-full text-right text-sm">
                   <thead className="bg-muted/50 text-muted-foreground font-semibold border-b">
                     <tr>
-                      <th className="px-4 py-2.5 whitespace-nowrap">اسم السائق</th>
+                      <th className="px-4 py-2.5 whitespace-nowrap">اسم المندوب</th>
                       <th className="px-4 py-2.5 whitespace-nowrap">الهاتف</th>
                       <th className="px-4 py-2.5 whitespace-nowrap text-center">الحالة</th>
                       <th className="px-4 py-2.5 whitespace-nowrap text-center">الطلبات المكتملة</th>
@@ -147,7 +147,7 @@ export function DriversPage() {
                     {group.drivers.length === 0 && (
                       <tr>
                         <td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">
-                          لا يوجد سائقون في هذا الفرع.
+                          لا يوجد مندوبون في هذا الفرع.
                         </td>
                       </tr>
                     )}
@@ -158,7 +158,7 @@ export function DriversPage() {
           ))}
           {groups.length === 0 && (
             <div className="bg-card border rounded-xl shadow-sm p-10 text-center text-muted-foreground">
-              لا يوجد سائقون مسجلون بعد.
+              لا يوجد مندوبون مسجلون بعد.
             </div>
           )}
         </div>
