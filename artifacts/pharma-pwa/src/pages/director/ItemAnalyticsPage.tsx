@@ -80,7 +80,7 @@ export function ItemAnalyticsPage() {
           <section className="bg-card border rounded-xl shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b bg-muted/20 flex items-center gap-2.5">
               <TrendingUp className="w-5 h-5 text-emerald-600" />
-              <h3 className="font-bold text-foreground">الأكثر طلباً 🔝</h3>
+              <h3 className="font-bold text-foreground">الأكثر طلباً</h3>
               <span className="text-xs text-muted-foreground mr-auto">
                 أعلى 10 أصناف خلال {period} يوماً
               </span>

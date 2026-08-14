@@ -11,9 +11,9 @@ import {
 } from '@/lib/expiryInventoryApi';
 
 const TABS: { bucket: ExpiryBucket; label: string; cls: string; badgeCls: string }[] = [
-  { bucket: 30, label: 'ينتهي خلال 30 يوم 🔴', cls: 'bg-red-50 text-red-700 border-red-200', badgeCls: 'bg-red-100 text-red-700' },
-  { bucket: 60, label: 'ينتهي خلال 60 يوم 🟠', cls: 'bg-orange-50 text-orange-700 border-orange-200', badgeCls: 'bg-orange-100 text-orange-700' },
-  { bucket: 90, label: 'ينتهي خلال 90 يوم 🟡', cls: 'bg-yellow-50 text-yellow-700 border-yellow-200', badgeCls: 'bg-yellow-100 text-yellow-700' },
+  { bucket: 30, label: 'ينتهي خلال 30 يوم', cls: 'bg-red-50 text-red-700 border-red-200', badgeCls: 'bg-red-100 text-red-700' },
+  { bucket: 60, label: 'ينتهي خلال 60 يوم', cls: 'bg-orange-50 text-orange-700 border-orange-200', badgeCls: 'bg-orange-100 text-orange-700' },
+  { bucket: 90, label: 'ينتهي خلال 90 يوم', cls: 'bg-yellow-50 text-yellow-700 border-yellow-200', badgeCls: 'bg-yellow-100 text-yellow-700' },
 ];
 
 function daysBadge(days: number | null): { label: string; cls: string } {

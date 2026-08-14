@@ -1,127 +1,165 @@
-import { Outlet, NavLink, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Pill, LayoutDashboard, Users, UserCheck, Truck, BarChart3, Database, Activity, LayoutList, BadgePercent, Gift, AlarmClock, Wallet, Bell, LogOut } from 'lucide-react';
+import {
+  Activity,
+  AlarmClock,
+  BarChart3,
+  Bell,
+  Database,
+  Gift,
+  LayoutDashboard,
+  LayoutList,
+  LogOut,
+  Pill,
+  Search,
+  Truck,
+  UserCheck,
+  Users,
+  Wallet,
+} from 'lucide-react';
+
+const navItems = [
+  { to: '/director/dashboard', label: 'لوحة القيادة', icon: LayoutDashboard, group: 'المركز' },
+  { to: '/director/branch-managers', label: 'مدراء الفروع', icon: Users, group: 'المركز' },
+  { to: '/director/pending-clients', label: 'طلبات الانضمام', icon: UserCheck, group: 'المركز' },
+  { to: '/director/drivers', label: 'المندوبون', icon: Truck, group: 'التشغيل' },
+  { to: '/director/item-analytics', label: 'تحليلات الأصناف', icon: BarChart3, group: 'التشغيل' },
+  { to: '/director/catalog', label: 'كتالوج المنتجات', icon: Database, group: 'التشغيل' },
+  { to: '/director/inventory-overview', label: 'نظرة المخزون', icon: Activity, group: 'التشغيل' },
+  { to: '/director/orders-monitoring', label: 'مراقبة الطلبات', icon: LayoutList, group: 'التشغيل' },
+  { to: '/director/promotional-offers', label: 'العروض الترويجية', icon: Gift, group: 'النمو' },
+  { to: '/director/bonus-overview', label: 'نظام البونص', icon: Gift, group: 'النمو' },
+  { to: '/director/expiry-alerts', label: 'انتهاء الصلاحية', icon: AlarmClock, group: 'المخاطر' },
+  { to: '/director/receivables', label: 'الذمم المدينة', icon: Wallet, group: 'المالية' },
+  { to: '/director/send-notification', label: 'إرسال إشعار', icon: Bell, group: 'المركز' },
+];
+
+const mobileItems = navItems.slice(0, 4);
+
+function getPageTitle(pathname: string) {
+  return navItems.find((item) => pathname.startsWith(item.to))?.label ?? 'لوحة القيادة';
+}
 
 export function DirectorLayout() {
   const { userProfile, logout } = useAuth();
   const location = useLocation();
-
-  const getPageTitle = () => {
-    if (location.pathname.includes('dashboard')) return 'لوحة التحكم';
-    if (location.pathname.includes('branch-managers')) return 'إدارة حسابات مدراء الفروع';
-    if (location.pathname.includes('pending-clients')) return 'طلبات الانضمام المعلّقة';
-    if (location.pathname.includes('drivers')) return 'المندوبون';
-    if (location.pathname.includes('item-analytics')) return 'تحليلات الأصناف';
-    if (location.pathname.includes('catalog')) return 'كتالوج المنتجات';
-    if (location.pathname.includes('inventory-overview')) return 'نظرة المخزون';
-    if (location.pathname.includes('orders-monitoring')) return 'مراقبة الطلبات';
-    if (location.pathname.includes('promotional-offers')) return 'العروض الترويجية';
-    if (location.pathname.includes('bonus')) return 'نظام البونص';
-    if (location.pathname.includes('expiry-alerts')) return 'تنبيهات انتهاء الصلاحية';
-    if (location.pathname.includes('receivables')) return 'الذمم المدينة';
-    if (location.pathname.includes('send-notification')) return 'إرسال إشعار';
-    return 'لوحة التحكم';
-  };
-
-  const navItems = [
-    { to: '/director/dashboard', label: 'لوحة التحكم', icon: LayoutDashboard },
-    { to: '/director/branch-managers', label: 'مدراء الفروع', icon: Users },
-    { to: '/director/pending-clients', label: 'طلبات الانضمام', icon: UserCheck },
-    { to: '/director/drivers', label: 'المندوبون', icon: Truck },
-    { to: '/director/item-analytics', label: 'تحليلات الأصناف', icon: BarChart3 },
-    { to: '/director/catalog', label: 'كتالوج المنتجات', icon: Database },
-    { to: '/director/inventory-overview', label: 'نظرة المخزون', icon: Activity },
-    { to: '/director/orders-monitoring', label: 'مراقبة الطلبات', icon: LayoutList },
-    { to: '/director/promotional-offers', label: 'العروض الترويجية', icon: BadgePercent },
-    { to: '/director/bonus-overview', label: 'نظام البونص', icon: Gift },
-    { to: '/director/expiry-alerts', label: 'انتهاء الصلاحية', icon: AlarmClock },
-    { to: '/director/receivables', label: 'الذمم المدينة', icon: Wallet },
-    { to: '/director/send-notification', label: 'إرسال إشعار', icon: Bell },
-  ];
+  const pageTitle = getPageTitle(location.pathname);
+  const groups = Array.from(new Set(navItems.map((item) => item.group)));
 
   return (
-    <div className="flex flex-col h-screen">
-      <div className="flex flex-1 bg-muted/20 overflow-hidden">
-      {/* Sidebar */}
-      <aside className="w-64 bg-sidebar border-l border-sidebar-border flex flex-col hidden md:flex shrink-0">
-        <div className="p-6 border-b border-sidebar-border">
-          <div className="flex items-center gap-3">
-            <div className="bg-primary/10 p-2 rounded-lg text-primary">
-              <Pill className="w-6 h-6" />
+    <div className="director-shell flex min-h-[100dvh] flex-col text-foreground">
+      <div className="flex min-h-[100dvh] flex-1 overflow-hidden">
+        <aside className="hidden w-[272px] shrink-0 flex-col border-l border-sidebar-border bg-sidebar/95 md:flex">
+          <div className="relative border-b border-sidebar-border px-5 pb-5 pt-6">
+            <div className="absolute inset-x-0 bottom-0 h-px director-glow-line opacity-50" />
+            <div className="flex items-center gap-3">
+              <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/40 bg-primary/10 text-primary shadow-[0_0_24px_hsl(var(--primary)/.12)]">
+                <Pill className="h-6 w-6" strokeWidth={1.8} />
+                <span className="absolute -bottom-1 -left-1 h-2.5 w-2.5 rounded-full border-2 border-sidebar bg-emerald-400" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">NOVA DISTRIBUTION</p>
+                <h1 className="mt-1 text-lg font-extrabold text-sidebar-foreground">مركز القيادة</h1>
+              </div>
             </div>
-            <div>
-              <h1 className="font-bold text-sidebar-foreground text-lg">المدير العام</h1>
-              <p className="text-xs text-muted-foreground">{userProfile?.name || 'مدير النظام'}</p>
+            <div className="mt-5 flex items-center justify-between rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2.5">
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent/15 text-xs font-bold text-accent">
+                  {(userProfile?.name || 'مدير').slice(0, 1)}
+                </span>
+                <div>
+                  <p className="text-xs font-bold text-sidebar-foreground">{userProfile?.name || 'مدير النظام'}</p>
+                  <p className="text-[10px] text-muted-foreground">المدير العام</p>
+                </div>
+              </div>
+              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,.6)]" />
             </div>
           </div>
-        </div>
 
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-sidebar-foreground hover:bg-muted'
-                }`
-              }
-            >
-              <item.icon className="w-5 h-5" />
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
+          <nav className="director-scrollbar flex-1 overflow-y-auto px-3 py-5">
+            {groups.map((group) => (
+              <div key={group} className="mb-5">
+                <p className="mb-2 px-3 text-[10px] font-bold tracking-[0.15em] text-muted-foreground/70">{group}</p>
+                <div className="space-y-1">
+                  {navItems.filter((item) => item.group === group).map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      className={({ isActive }) =>
+                        `group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold transition-all duration-200 ${
+                          isActive
+                            ? 'bg-primary/10 text-primary shadow-[inset_0_0_0_1px_hsl(var(--primary)/.18)]'
+                            : 'text-sidebar-foreground/65 hover:bg-white/[0.045] hover:text-sidebar-foreground'
+                        }`
+                      }
+                    >
+                      {({ isActive }) => (
+                        <>
+                          {isActive && <span className="absolute bottom-2 top-2 right-0 w-0.5 rounded-full bg-primary shadow-[0_0_10px_hsl(var(--primary))]" />}
+                          <item.icon className="h-[17px] w-[17px] shrink-0" strokeWidth={isActive ? 2.2 : 1.8} />
+                          <span>{item.label}</span>
+                        </>
+                      )}
+                    </NavLink>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </nav>
 
-        <div className="p-4 border-t border-sidebar-border">
-          <button
-            onClick={logout}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-destructive hover:bg-destructive/10 w-full transition-colors"
-          >
-            <LogOut className="w-5 h-5" />
-            تسجيل الخروج
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Header (mobile & desktop) */}
-        <header className="bg-card border-b h-16 flex items-center justify-between px-6 shrink-0 shadow-sm">
-          <h2 className="text-xl font-bold text-foreground">{getPageTitle()}</h2>
-          <div className="md:hidden flex items-center">
-            <button onClick={logout} className="text-destructive font-medium text-sm">
-              خروج
+          <div className="border-t border-sidebar-border p-3">
+            <button onClick={logout} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-xs font-semibold text-destructive/80 transition-colors hover:bg-destructive/10 hover:text-destructive">
+              <LogOut className="h-[17px] w-[17px]" />
+              تسجيل الخروج
             </button>
           </div>
-        </header>
+        </aside>
 
-        {/* Mobile Navigation (bottom bar) - very simplified for this context */}
-        <div className="md:hidden flex items-center justify-around bg-card border-t py-2 shrink-0 fixed bottom-0 w-full z-10">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                `flex flex-col items-center gap-1 p-2 text-xs ${
-                  isActive ? 'text-primary' : 'text-muted-foreground'
-                }`
-              }
-            >
-              <item.icon className="w-5 h-5" />
-              {item.label.split(' ')[0]}
-            </NavLink>
-          ))}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="relative z-10 flex h-[74px] shrink-0 items-center justify-between border-b border-border/80 bg-background/80 px-4 backdrop-blur-xl md:px-8">
+            <div className="flex items-center gap-3">
+              <div>
+                <div className="flex items-center gap-2 text-[10px] font-semibold text-muted-foreground">
+                  <span>مركز القيادة</span><span className="text-primary">/</span><span className="text-primary">{pageTitle}</span>
+                </div>
+                <h2 className="mt-1 text-lg font-extrabold tracking-tight md:text-xl">{pageTitle}</h2>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 md:gap-3">
+              <div className="hidden items-center gap-2 rounded-xl border border-border bg-card/60 px-3 py-2 text-xs text-muted-foreground lg:flex">
+                <Search className="h-3.5 w-3.5" />
+                <span>بحث في النظام</span>
+                <kbd className="rounded border border-border px-1.5 py-0.5 text-[9px]">⌘ K</kbd>
+              </div>
+              <span className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-card/70 text-muted-foreground" aria-label="الإشعارات">
+                <Bell className="h-4 w-4" />
+                <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-amber-400" />
+              </span>
+            </div>
+          </header>
+
+          <main className="director-grid director-scrollbar min-h-0 flex-1 overflow-auto p-4 pb-24 md:p-8 md:pb-8">
+            <Outlet />
+          </main>
         </div>
+      </div>
 
-        {/* Page Content */}
-        <main className="flex-1 overflow-auto p-4 md:p-6 pb-20 md:pb-6 relative">
-          <Outlet />
-        </main>
-      </div>
-      </div>
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex h-[68px] items-center justify-around border-t border-border bg-sidebar/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
+        {mobileItems.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            className={({ isActive }) => `flex min-w-[62px] flex-col items-center gap-1 rounded-xl px-2 py-1.5 text-[10px] font-semibold transition-colors ${isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}
+          >
+            <item.icon className="h-[18px] w-[18px]" />
+            {item.label.split(' ')[0]}
+          </NavLink>
+        ))}
+        <button onClick={logout} className="flex min-w-[62px] flex-col items-center gap-1 rounded-xl px-2 py-1.5 text-[10px] font-semibold text-destructive/80">
+          <LogOut className="h-[18px] w-[18px]" />
+          خروج
+        </button>
+      </nav>
     </div>
   );
 }

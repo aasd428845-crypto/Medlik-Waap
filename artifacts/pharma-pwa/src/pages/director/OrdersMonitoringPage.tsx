@@ -213,7 +213,7 @@ export function OrdersMonitoringPage() {
                                 className="flex-1 bg-background border hover:bg-muted text-foreground px-4 py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-medium transition-colors"
                               >
                                 <Phone className="w-4 h-4 text-primary" />
-                                اتصال بالعميل 📞
+                                اتصال بالعميل
                               </a>
 
                               <button
@@ -221,7 +221,7 @@ export function OrdersMonitoringPage() {
                                 className="flex-1 bg-amber-50 border border-amber-200 hover:bg-amber-100 text-amber-800 px-4 py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-medium transition-colors"
                               >
                                 <MessageSquare className="w-4 h-4" />
-                                تنبيه الفرع 💬
+                                تنبيه الفرع
                               </button>
                             </div>
 
