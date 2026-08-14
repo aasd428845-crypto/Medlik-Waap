@@ -22,6 +22,7 @@ import { NewBonusRulePage } from '@/pages/director/NewBonusRulePage';
 import { EditBonusRulePage } from '@/pages/director/EditBonusRulePage';
 import { ExpiryAlertsPage } from '@/pages/director/ExpiryAlertsPage';
 import { ReceivablesPage } from '@/pages/director/ReceivablesPage';
+import { FinancialDashboardPage } from '@/pages/director/FinancialDashboardPage';
 
 function ProtectedRoute({ allowedRoles }: { allowedRoles: string[] }) {
   const { userProfile, loading } = useAuth();
@@ -33,9 +34,6 @@ function ProtectedRoute({ allowedRoles }: { allowedRoles: string[] }) {
       <div className="h-screen flex flex-col items-center justify-center p-4 text-center">
         <h2 className="text-2xl font-bold text-destructive mb-2">عذراً، غير مصرح لك</h2>
         <p className="text-muted-foreground">ليس لديك الصلاحيات الكافية لعرض هذه الصفحة.</p>
-        <div className="mt-6">
-          <Navigate to="/login" replace />
-        </div>
       </div>
     );
   }
@@ -46,9 +44,7 @@ function ProtectedRoute({ allowedRoles }: { allowedRoles: string[] }) {
 function RootRedirect() {
   const { userProfile, loading } = useAuth();
   if (loading) return <div className="h-screen flex items-center justify-center"><LoadingSpinner /></div>;
-
   if (userProfile?.role === 'company_director') return <Navigate to="/director/dashboard" replace />;
-
   return <Navigate to="/login" replace />;
 }
 
@@ -61,10 +57,10 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<RootRedirect />} />
 
-          {/* Director Routes */}
           <Route path="/director" element={<ProtectedRoute allowedRoles={['company_director']} />}>
             <Route element={<DirectorLayout />}>
               <Route path="dashboard" element={<DashboardPage />} />
+              <Route path="financial" element={<FinancialDashboardPage />} />
               <Route path="branch-managers" element={<BranchManagersPage />} />
               <Route path="pending-clients" element={<PendingClientsPage />} />
               <Route path="drivers" element={<DriversPage />} />
