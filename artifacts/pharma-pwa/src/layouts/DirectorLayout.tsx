@@ -7,6 +7,7 @@ import {
   Bell,
   Database,
   Gift,
+  Landmark,
   LayoutDashboard,
   LayoutList,
   LogOut,
@@ -30,6 +31,7 @@ const navItems = [
   { to: '/director/promotional-offers', label: 'العروض الترويجية', icon: Gift, group: 'النمو' },
   { to: '/director/bonus-overview', label: 'نظام البونص', icon: Gift, group: 'النمو' },
   { to: '/director/expiry-alerts', label: 'انتهاء الصلاحية', icon: AlarmClock, group: 'المخاطر' },
+  { to: '/director/financial', label: 'الإدارة المالية', icon: Landmark, group: 'المالية' },
   { to: '/director/receivables', label: 'الذمم المدينة', icon: Wallet, group: 'المالية' },
   { to: '/director/send-notification', label: 'إرسال إشعار', icon: Bell, group: 'المركز' },
 ];
