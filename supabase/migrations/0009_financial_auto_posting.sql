@@ -168,9 +168,16 @@ $$;
 
 drop trigger if exists trg_financial_commission_auto_journal on public.driver_commissions;
 create trigger trg_financial_commission_auto_journal
-  after insert or update on public.driver_commissions
+  after insert on public.driver_commissions
   for each row
-  when (NEW.status = 'paid' and (OLD is null or OLD.status is distinct from 'paid'))
+  when (NEW.status = 'paid')
+  execute function public.trg_financial_commission_auto_journal();
+
+drop trigger if exists trg_financial_commission_auto_journal_update on public.driver_commissions;
+create trigger trg_financial_commission_auto_journal_update
+  after update on public.driver_commissions
+  for each row
+  when (NEW.status = 'paid' and OLD.status is distinct from 'paid')
   execute function public.trg_financial_commission_auto_journal();
 
 -- 6) Trigger 3: بند طلب بونصي → حركة مخزون (bonus) --------------
