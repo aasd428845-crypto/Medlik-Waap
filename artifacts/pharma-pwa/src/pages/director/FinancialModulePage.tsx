@@ -27,7 +27,7 @@ export function FinancialModulePage() {
     try {
       const { data, error: queryError } = await supabase.from(meta.table).select(meta.columns.join(',')).limit(100);
       if (queryError) throw new Error(queryError.message);
-      setRows((data ?? []) as Record<string, unknown>[]);
+      setRows((data ?? []) as unknown as Record<string, unknown>[]);
     } catch (e) { setError(e instanceof Error ? e.message : 'تعذر تحميل الوحدة'); }
     finally { setLoading(false); }
   };

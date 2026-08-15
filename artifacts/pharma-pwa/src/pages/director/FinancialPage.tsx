@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Banknote, BookOpen, Landmark, Wallet, RefreshCw, FileText, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Banknote, BookOpen, Landmark, Wallet, RefreshCw, FileText, AlertTriangle, type LucideIcon } from 'lucide-react';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { getFinancialSummary, listRecentJournalEntries, type FinancialSummary, type JournalRow } from '@/lib/financialApi';
 
-const modules = [
+const modules: [string, string, LucideIcon][] = [
   ['دليل الحسابات', '/director/financial/accounts', BookOpen],
   ['القيود ودفتر الأستاذ', '/director/financial/journal', BookOpen],
   ['الصناديق والبنوك', '/director/financial/cash-bank', Landmark],
@@ -53,7 +53,7 @@ export function FinancialPage() {
     </section>}
 
     <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {modules.map(([label,path,Icon])=>{const I=Icon as typeof BookOpen;return <Link key={String(path)} to={String(path)} className="director-panel group rounded-2xl p-5 transition-transform hover:-translate-y-0.5"><div className="flex items-center justify-between"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary"><I className="h-5 w-5"/></span><ArrowLeft className="h-4 w-4 text-muted-foreground"/></div><h2 className="mt-5 text-sm font-extrabold">{label}</h2><p className="mt-1 text-[11px] text-muted-foreground">فتح وحدة الإدارة المالية</p></Link>})}
+      {modules.map(([label, path, Icon]) => <Link key={path} to={path} className="director-panel group rounded-2xl p-5 transition-transform hover:-translate-y-0.5"><div className="flex items-center justify-between"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary"><Icon className="h-5 w-5"/></span><ArrowLeft className="h-4 w-4 text-muted-foreground"/></div><h2 className="mt-5 text-sm font-extrabold">{label}</h2><p className="mt-1 text-[11px] text-muted-foreground">فتح وحدة الإدارة المالية</p></Link>)}
     </section>
 
     <section className="director-panel overflow-hidden rounded-2xl">
