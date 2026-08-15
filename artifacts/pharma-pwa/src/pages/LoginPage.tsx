@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Pill, LogIn } from 'lucide-react';
+import { Activity, ArrowLeft, LockKeyhole, Pill, ShieldCheck, Sparkles, UserRound } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ErrorMessage } from '@/components/ErrorMessage';
 
@@ -27,77 +27,117 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-muted/30 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
-      {/* Decorative background blobs */}
-      <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 rounded-full bg-primary/5 blur-3xl" />
-      <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 rounded-full bg-emerald-500/5 blur-3xl" />
-
-      <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
-        <div className="flex justify-center items-center gap-3">
-          <div className="bg-primary p-3 rounded-2xl shadow-lg shadow-primary/20">
-            <Pill className="w-8 h-8 text-primary-foreground" />
+    <main className="director-shell director-grid relative flex min-h-[100dvh] items-center overflow-hidden px-4 py-8 sm:px-6">
+      <div className="pointer-events-none absolute -right-32 -top-40 h-[32rem] w-[32rem] rounded-full bg-primary/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-48 -left-32 h-[32rem] w-[32rem] rounded-full bg-accent/10 blur-3xl" />
+      <div className="relative mx-auto grid w-full max-w-5xl overflow-hidden rounded-[2rem] border border-border/80 bg-card/40 shadow-2xl shadow-black/30 backdrop-blur-xl lg:grid-cols-[1.05fr_.95fr]">
+        <section className="relative hidden min-h-[620px] overflow-hidden border-l border-border/70 bg-gradient-to-br from-primary/20 via-card/60 to-accent/10 p-10 lg:flex lg:flex-col lg:justify-between">
+          <div className="absolute inset-0 opacity-40 [background-image:linear-gradient(hsl(195_50%_30%_/_0.12)_1px,transparent_1px),linear-gradient(90deg,hsl(195_50%_30%_/_0.12)_1px,transparent_1px)] [background-size:36px_36px]" />
+          <div className="relative">
+            <div className="mb-8 flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/40 bg-primary/10 text-primary shadow-[0_0_24px_hsl(var(--primary)/.16)]">
+                <Pill className="h-6 w-6" strokeWidth={1.8} />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold tracking-[0.18em] text-primary">NOVA DISTRIBUTION</p>
+                <p className="mt-1 text-lg font-extrabold">مركز القيادة</p>
+              </div>
+            </div>
+            <p className="max-w-sm text-4xl font-extrabold leading-[1.25] tracking-tight">
+              قرار أسرع، <span className="text-primary">رؤية أوضح.</span>
+            </p>
+            <p className="mt-5 max-w-sm text-sm leading-7 text-muted-foreground">
+              مساحة تنفيذية موحدة لمراقبة الأداء المالي والتشغيلي لشبكة توزيع الأدوية.
+            </p>
           </div>
-          <h1 className="text-3xl font-extrabold text-foreground tracking-tight">نظام إدارة الأدوية</h1>
-        </div>
-        <h2 className="mt-6 text-center text-xl text-muted-foreground font-medium">
-          بوابة الإدارة المركزية
-        </h2>
-      </div>
+          <div className="relative grid grid-cols-2 gap-3">
+            <div className="rounded-2xl border border-border bg-background/35 p-4">
+              <Activity className="h-5 w-5 text-accent" />
+              <p className="mt-6 text-[11px] text-muted-foreground">البيانات التشغيلية</p>
+              <p className="mt-1 text-sm font-bold text-emerald-300">متصلة ومحدثة</p>
+            </div>
+            <div className="rounded-2xl border border-border bg-background/35 p-4">
+              <ShieldCheck className="h-5 w-5 text-primary" />
+              <p className="mt-6 text-[11px] text-muted-foreground">مستوى الوصول</p>
+              <p className="mt-1 text-sm font-bold">مدير عام</p>
+            </div>
+          </div>
+        </section>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
-        <div className="bg-card py-8 px-4 shadow-xl border sm:rounded-2xl sm:px-10">
-          <form className="space-y-6" onSubmit={handleSubmit}>
+        <section className="flex min-h-[620px] flex-col justify-center p-6 sm:p-10">
+          <div className="mb-8 lg:hidden">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/40 bg-primary/10 text-primary shadow-[0_0_24px_hsl(var(--primary)/.16)]">
+                <Pill className="h-6 w-6" strokeWidth={1.8} />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold tracking-[0.18em] text-primary">NOVA DISTRIBUTION</p>
+                <h1 className="mt-1 text-lg font-extrabold">مركز القيادة</h1>
+              </div>
+            </div>
+          </div>
+          <div className="mb-8">
+            <p className="text-[10px] font-bold tracking-[0.16em] text-primary">SECURE ACCESS</p>
+            <h2 className="mt-2 text-2xl font-extrabold tracking-tight">تسجيل الدخول إلى المنظومة</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">أدخل بيانات المدير العام للوصول إلى لوحة القيادة المركزية.</p>
+          </div>
+
+          <form className="space-y-5" onSubmit={handleSubmit}>
             {error && <ErrorMessage message={error} />}
-
             <div>
-              <label className="block text-sm font-semibold text-foreground mb-2">
-                البريد الإلكتروني
-              </label>
-              <input
-                type="email"
-                required
-                className="appearance-none block w-full px-4 py-3 border border-input rounded-xl bg-background placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@example.com"
-                dir="ltr"
-              />
+              <label className="mb-2 block text-xs font-bold text-foreground">البريد الإلكتروني</label>
+              <div className="relative">
+                <UserRound className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="email"
+                  required
+                  autoComplete="email"
+                  className="block w-full rounded-xl border border-input bg-background/70 py-3.5 pl-4 pr-11 text-sm outline-none transition-all placeholder:text-muted-foreground/60 focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="admin@example.com"
+                  dir="ltr"
+                />
+              </div>
             </div>
-
             <div>
-              <label className="block text-sm font-semibold text-foreground mb-2">
-                كلمة المرور
-              </label>
-              <input
-                type="password"
-                required
-                className="appearance-none block w-full px-4 py-3 border border-input rounded-xl bg-background placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                dir="ltr"
-              />
+              <label className="mb-2 block text-xs font-bold text-foreground">كلمة المرور</label>
+              <div className="relative">
+                <LockKeyhole className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="password"
+                  required
+                  autoComplete="current-password"
+                  className="block w-full rounded-xl border border-input bg-background/70 py-3.5 pl-4 pr-11 text-sm outline-none transition-all placeholder:text-muted-foreground/60 focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  dir="ltr"
+                />
+              </div>
             </div>
-
-            <div>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-primary-foreground bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed transition-all items-center gap-2"
-              >
-                {isSubmitting ? (
-                  <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  <>
-                    تسجيل الدخول
-                    <LogIn className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-            </div>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="group flex w-full items-center justify-center gap-2 rounded-xl border border-primary/70 bg-primary py-3.5 text-sm font-extrabold text-primary-foreground shadow-[0_10px_26px_hsl(var(--primary)/.18)] transition-all hover:-translate-y-0.5 hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSubmitting ? (
+                <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
+              ) : (
+                <>
+                  دخول آمن
+                  <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+                </>
+              )}
+            </button>
           </form>
-        </div>
+
+          <div className="mt-8 flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
+            <Sparkles className="h-3.5 w-3.5 text-accent" />
+            هذا النظام مخصص للإدارة التنفيذية المعتمدة
+          </div>
+        </section>
       </div>
-    </div>
+    </main>
   );
 }
