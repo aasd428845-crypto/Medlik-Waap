@@ -1,0 +1,175 @@
+-- MedLink Financial Database - Clean Installer
+-- هذه نسخة تثبيت نظيفة للنظام المالي 0006-0008.
+-- لا تحتوي على خطأ "a lter" الموجود في النسخة التي ظهرت في محرر Supabase.
+-- يمكن تشغيلها بعد تطبيق migrations 0001-0005.
+
+begin;
+
+-- ============================================================
+-- 0006: Financial Core
+-- ============================================================
+create extension if not exists pgcrypto;
+
+create table if not exists public.financial_currencies(code text primary key,name text not null,symbol text,decimal_places smallint not null default 2 check(decimal_places between 0 and 6),is_active boolean not null default true);
+insert into public.financial_currencies(code,name,symbol) values ('YER','الريال اليمني','﷼'),('USD','الدولار الأمريكي','$'),('SAR','الريال السعودي','﷼') on conflict(code) do nothing;
+
+create table if not exists public.financial_companies(id uuid primary key default gen_random_uuid(),name text not null,legal_name text,base_currency_code text not null default 'YER' references public.financial_currencies(code),is_active boolean not null default true,created_at timestamptz not null default now());
+create table if not exists public.financial_fiscal_years(id uuid primary key default gen_random_uuid(),company_id uuid not null references public.financial_companies(id) on delete cascade,year_code text not null,start_date date not null,end_date date not null,status text not null default 'open' check(status in('open','closed')),unique(company_id,year_code));
+create table if not exists public.financial_periods(id uuid primary key default gen_random_uuid(),fiscal_year_id uuid not null references public.financial_fiscal_years(id) on delete cascade,period_number smallint not null check(period_number between 1 and 13),name text not null,start_date date not null,end_date date not null,status text not null default 'open' check(status in('open','closed')),unique(fiscal_year_id,period_number));
+create table if not exists public.financial_cost_centers(id uuid primary key default gen_random_uuid(),company_id uuid not null references public.financial_companies(id) on delete cascade,code text not null,name text not null,branch_id uuid references public.branches(id) on delete set null,parent_id uuid references public.financial_cost_centers(id) on delete set null,is_active boolean not null default true,unique(company_id,code));
+create table if not exists public.financial_accounts(id uuid primary key default gen_random_uuid(),company_id uuid not null references public.financial_companies(id) on delete cascade,code text not null,name text not null,account_type text not null check(account_type in('asset','liability','equity','revenue','cogs','expense')),parent_id uuid references public.financial_accounts(id) on delete restrict,level smallint not null default 1,is_postable boolean not null default true,normal_balance text not null check(normal_balance in('debit','credit')),is_active boolean not null default true,unique(company_id,code));
+create index if not exists financial_accounts_parent_idx on public.financial_accounts(parent_id);
+
+create table if not exists public.financial_cash_accounts(id uuid primary key default gen_random_uuid(),company_id uuid not null references public.financial_companies(id) on delete cascade,code text not null,name text not null,currency_code text not null default 'YER' references public.financial_currencies(code),branch_id uuid references public.branches(id) on delete set null,gl_account_id uuid references public.financial_accounts(id) on delete restrict,is_active boolean not null default true,unique(company_id,code));
+create table if not exists public.financial_bank_accounts(id uuid primary key default gen_random_uuid(),company_id uuid not null references public.financial_companies(id) on delete cascade,bank_name text not null,account_name text not null,account_number text,iban text,currency_code text not null default 'YER' references public.financial_currencies(code),branch_id uuid references public.branches(id) on delete set null,gl_account_id uuid references public.financial_accounts(id) on delete restrict,is_active boolean not null default true);
+create table if not exists public.financial_documents(id uuid primary key default gen_random_uuid(),company_id uuid not null references public.financial_companies(id) on delete cascade,document_type text not null,source_table text,source_id uuid,document_number text,description text,created_by uuid references public.users(id) on delete set null,created_at timestamptz not null default now());
+
+create table if not exists public.financial_journal_entries(id uuid primary key default gen_random_uuid(),company_id uuid not null references public.financial_companies(id) on delete cascade,entry_number bigint generated always as identity,entry_date date not null,period_id uuid references public.financial_periods(id) on delete restrict,description text not null,source_document_id uuid references public.financial_documents(id) on delete set null,status text not null default 'draft' check(status in('draft','posted','voided')),created_by uuid references public.users(id) on delete set null,posted_by uuid references public.users(id) on delete set null,posted_at timestamptz,created_at timestamptz not null default now(),void_reason text);
+create table if not exists public.financial_journal_lines(id uuid primary key default gen_random_uuid(),journal_entry_id uuid not null references public.financial_journal_entries(id) on delete restrict,line_number smallint not null,account_id uuid not null references public.financial_accounts(id) on delete restrict,cost_center_id uuid references public.financial_cost_centers(id) on delete set null,branch_id uuid references public.branches(id) on delete set null,description text,debit numeric(18,2) not null default 0 check(debit>=0),credit numeric(18,2) not null default 0 check(credit>=0),currency_code text not null default 'YER' references public.financial_currencies(code),exchange_rate numeric(20,8) not null default 1 check(exchange_rate>0),check((debit>0 and credit=0) or (credit>0 and debit=0)),unique(journal_entry_id,line_number));
+
+create or replace function public.post_financial_journal_entry(p_entry_id uuid) returns void language plpgsql security definer set search_path=public as $$ declare d numeric(18,2); c numeric(18,2); n int; s text; begin select status into s from public.financial_journal_entries where id=p_entry_id for update; if s is null then raise exception 'Journal entry not found'; end if; if s<>'draft' then raise exception 'Only draft entries can be posted'; end if; select status into s from public.financial_periods p join public.financial_journal_entries e on e.period_id=p.id where e.id=p_entry_id; if s<>'open' then raise exception 'Period is closed or missing'; end if; select count(*),coalesce(sum(debit),0),coalesce(sum(credit),0) into n,d,c from public.financial_journal_lines where journal_entry_id=p_entry_id; if n<2 or d<>c then raise exception 'Journal entry is not balanced'; end if; update public.financial_journal_entries set status='posted',posted_at=now(),posted_by=auth.uid() where id=p_entry_id; end $$;
+revoke all on function public.post_financial_journal_entry(uuid) from public;
+
+create table if not exists public.financial_receipts(id uuid primary key default gen_random_uuid(),receipt_number bigint generated always as identity,client_id uuid not null references public.users(id) on delete restrict,invoice_id uuid references public.invoices(id) on delete restrict,amount numeric(18,2) not null check(amount>0),currency_code text not null default 'YER' references public.financial_currencies(code),cash_account_id uuid references public.financial_cash_accounts(id) on delete restrict,bank_account_id uuid references public.financial_bank_accounts(id) on delete restrict,receipt_date date not null default current_date,status text not null default 'draft' check(status in('draft','posted','voided')),journal_entry_id uuid references public.financial_journal_entries(id) on delete restrict,created_by uuid references public.users(id) on delete set null,check(((cash_account_id is not null)::int+(bank_account_id is not null)::int)=1));
+create table if not exists public.financial_suppliers(id uuid primary key default gen_random_uuid(),company_id uuid not null references public.financial_companies(id) on delete cascade,supplier_code text not null,name text not null,phone text,credit_limit numeric(18,2) not null default 0,payable_account_id uuid not null references public.financial_accounts(id) on delete restrict,is_active boolean not null default true,unique(company_id,supplier_code));
+create table if not exists public.financial_supplier_bills(id uuid primary key default gen_random_uuid(),supplier_id uuid not null references public.financial_suppliers(id) on delete restrict,bill_number text not null,bill_date date not null default current_date,due_date date,amount numeric(18,2) not null check(amount>0),status text not null default 'open' check(status in('draft','open','partially_paid','paid','cancelled')),journal_entry_id uuid references public.financial_journal_entries(id) on delete restrict,unique(supplier_id,bill_number));
+create table if not exists public.financial_supplier_payments(id uuid primary key default gen_random_uuid(),supplier_id uuid not null references public.financial_suppliers(id) on delete restrict,bill_id uuid references public.financial_supplier_bills(id) on delete restrict,amount numeric(18,2) not null check(amount>0),payment_date date not null default current_date,cash_account_id uuid references public.financial_cash_accounts(id) on delete restrict,bank_account_id uuid references public.financial_bank_accounts(id) on delete restrict,journal_entry_id uuid references public.financial_journal_entries(id) on delete restrict,check(((cash_account_id is not null)::int+(bank_account_id is not null)::int)=1));
+
+create table if not exists public.financial_cash_movements(id uuid primary key default gen_random_uuid(),cash_account_id uuid not null references public.financial_cash_accounts(id) on delete restrict,movement_date date not null default current_date,movement_type text not null check(movement_type in('receipt','disbursement','transfer_in','transfer_out','adjustment')),amount numeric(18,2) not null check(amount>0),reference_type text,reference_id uuid,journal_entry_id uuid references public.financial_journal_entries(id) on delete restrict,status text not null default 'posted',description text);
+create table if not exists public.financial_bank_movements(id uuid primary key default gen_random_uuid(),bank_account_id uuid not null references public.financial_bank_accounts(id) on delete restrict,movement_date date not null default current_date,movement_type text not null check(movement_type in('deposit','withdrawal','transfer_in','transfer_out','fee','adjustment')),amount numeric(18,2) not null check(amount>0),reference_number text,journal_entry_id uuid references public.financial_journal_entries(id) on delete restrict,status text not null default 'posted',description text);
+create table if not exists public.financial_bank_reconciliations(id uuid primary key default gen_random_uuid(),bank_account_id uuid not null references public.financial_bank_accounts(id) on delete restrict,statement_date date not null,statement_balance numeric(18,2) not null,ledger_balance numeric(18,2) not null,status text not null default 'open' check(status in('open','completed','reopened')),completed_by uuid references public.users(id) on delete set null,completed_at timestamptz,notes text);
+
+create table if not exists public.financial_inventory_movements(id uuid primary key default gen_random_uuid(),inventory_id uuid references public.warehouse_inventory(id) on delete restrict,branch_id uuid not null references public.branches(id) on delete restrict,product_id uuid not null references public.products(id) on delete restrict,movement_type text not null check(movement_type in('receipt','sale','return_in','return_out','transfer_in','transfer_out','adjustment','damage','expired','sample')),quantity numeric(18,3) not null check(quantity<>0),unit_cost numeric(18,4) not null default 0,reference_type text,reference_id uuid,journal_entry_id uuid references public.financial_journal_entries(id) on delete restrict,movement_date timestamptz not null default now());
+create table if not exists public.financial_stock_counts(id uuid primary key default gen_random_uuid(),branch_id uuid not null references public.branches(id) on delete restrict,count_date date not null default current_date,status text not null default 'draft' check(status in('draft','approved','posted','cancelled')),journal_entry_id uuid references public.financial_journal_entries(id) on delete restrict,notes text);
+create table if not exists public.financial_stock_count_lines(id uuid primary key default gen_random_uuid(),stock_count_id uuid not null references public.financial_stock_counts(id) on delete cascade,inventory_id uuid references public.warehouse_inventory(id) on delete restrict,product_id uuid not null references public.products(id) on delete restrict,system_quantity numeric(18,3) not null default 0,counted_quantity numeric(18,3) not null default 0,unit_cost numeric(18,4) not null default 0,difference_quantity numeric(18,3) generated always as(counted_quantity-system_quantity) stored);
+
+create table if not exists public.financial_expenses(id uuid primary key default gen_random_uuid(),expense_number bigint generated always as identity,expense_date date not null default current_date,category_account_id uuid not null references public.financial_accounts(id) on delete restrict,amount numeric(18,2) not null check(amount>0),branch_id uuid references public.branches(id) on delete set null,cost_center_id uuid references public.financial_cost_centers(id) on delete set null,cash_account_id uuid references public.financial_cash_accounts(id) on delete restrict,bank_account_id uuid references public.financial_bank_accounts(id) on delete restrict,status text not null default 'draft' check(status in('draft','approved','posted','voided')),journal_entry_id uuid references public.financial_journal_entries(id) on delete restrict,description text,check(((cash_account_id is not null)::int+(bank_account_id is not null)::int)=1));
+create table if not exists public.financial_fixed_assets(id uuid primary key default gen_random_uuid(),asset_code text not null unique,name text not null,acquisition_date date not null,acquisition_cost numeric(18,2) not null,useful_life_months int not null check(useful_life_months>0),salvage_value numeric(18,2) not null default 0,asset_account_id uuid not null references public.financial_accounts(id) on delete restrict,accumulated_depreciation_account_id uuid not null references public.financial_accounts(id) on delete restrict,depreciation_expense_account_id uuid not null references public.financial_accounts(id) on delete restrict,branch_id uuid references public.branches(id) on delete set null,status text not null default 'active');
+create table if not exists public.financial_budgets(id uuid primary key default gen_random_uuid(),company_id uuid not null references public.financial_companies(id) on delete cascade,fiscal_year_id uuid not null references public.financial_fiscal_years(id) on delete restrict,name text not null,status text not null default 'draft' check(status in('draft','approved','closed')));
+create table if not exists public.financial_budget_lines(id uuid primary key default gen_random_uuid(),budget_id uuid not null references public.financial_budgets(id) on delete cascade,period_id uuid not null references public.financial_periods(id) on delete restrict,account_id uuid not null references public.financial_accounts(id) on delete restrict,branch_id uuid references public.branches(id) on delete set null,cost_center_id uuid references public.financial_cost_centers(id) on delete set null,amount numeric(18,2) not null default 0);
+
+create or replace view public.financial_general_ledger as select e.company_id,e.entry_number,e.entry_date,e.status,e.description,l.account_id,a.code account_code,a.name account_name,l.branch_id,l.cost_center_id,l.debit,l.credit,l.currency_code from public.financial_journal_entries e join public.financial_journal_lines l on l.journal_entry_id=e.id join public.financial_accounts a on a.id=l.account_id where e.status='posted';
+create or replace view public.financial_trial_balance as select e.company_id,l.account_id,a.code account_code,a.name account_name,sum(l.debit) total_debit,sum(l.credit) total_credit,sum(l.debit-l.credit) net_balance from public.financial_journal_entries e join public.financial_journal_lines l on l.journal_entry_id=e.id join public.financial_accounts a on a.id=l.account_id where e.status='posted' group by e.company_id,l.account_id,a.code,a.name;
+create or replace view public.financial_branch_profitability as select e.company_id,l.branch_id,sum(case when a.account_type='revenue' then l.credit-l.debit else 0 end) revenue,sum(case when a.account_type='cogs' then l.debit-l.credit else 0 end) cogs,sum(case when a.account_type='expense' then l.debit-l.credit else 0 end) expenses from public.financial_journal_entries e join public.financial_journal_lines l on l.journal_entry_id=e.id join public.financial_accounts a on a.id=l.account_id where e.status='posted' group by e.company_id,l.branch_id;
+
+create table if not exists public.financial_audit_logs(id uuid primary key default gen_random_uuid(),actor_user_id uuid references public.users(id) on delete set null,action text not null,entity_table text not null,entity_id uuid,old_data jsonb,new_data jsonb,reason text,created_at timestamptz not null default now());
+
+create or replace function public.prevent_posted_journal_line_mutation() returns trigger language plpgsql as $$ declare s text; begin select status into s from public.financial_journal_entries where id=old.journal_entry_id; if s='posted' then raise exception 'Posted journal lines are immutable'; end if; return old; end $$;
+create or replace function public.prevent_posted_journal_mutation() returns trigger language plpgsql as $$ begin if old.status='posted' then raise exception 'Posted journal entries are immutable; use a reversal'; end if; return old; end $$;
+drop trigger if exists trg_financial_journal_immutable on public.financial_journal_entries;
+create trigger trg_financial_journal_immutable before update or delete on public.financial_journal_entries for each row execute function public.prevent_posted_journal_mutation();
+drop trigger if exists trg_financial_journal_line_immutable on public.financial_journal_lines;
+create trigger trg_financial_journal_line_immutable before update or delete on public.financial_journal_lines for each row execute function public.prevent_posted_journal_line_mutation();
+
+-- التصحيح: ALTER مكتوبة ككلمة SQL واحدة، وليس "a lter".
+alter table public.financial_companies enable row level security;
+alter table public.financial_fiscal_years enable row level security;
+alter table public.financial_periods enable row level security;
+alter table public.financial_cost_centers enable row level security;
+alter table public.financial_accounts enable row level security;
+alter table public.financial_cash_accounts enable row level security;
+alter table public.financial_bank_accounts enable row level security;
+alter table public.financial_documents enable row level security;
+alter table public.financial_journal_entries enable row level security;
+alter table public.financial_journal_lines enable row level security;
+alter table public.financial_receipts enable row level security;
+alter table public.financial_suppliers enable row level security;
+alter table public.financial_supplier_bills enable row level security;
+alter table public.financial_supplier_payments enable row level security;
+alter table public.financial_cash_movements enable row level security;
+alter table public.financial_bank_movements enable row level security;
+alter table public.financial_bank_reconciliations enable row level security;
+alter table public.financial_inventory_movements enable row level security;
+alter table public.financial_stock_counts enable row level security;
+alter table public.financial_stock_count_lines enable row level security;
+alter table public.financial_expenses enable row level security;
+alter table public.financial_fixed_assets enable row level security;
+alter table public.financial_budgets enable row level security;
+alter table public.financial_budget_lines enable row level security;
+alter table public.financial_audit_logs enable row level security;
+
+-- ============================================================
+-- 0007: Setup + RLS
+-- ============================================================
+insert into public.financial_companies(name,legal_name,base_currency_code)
+select 'MedLink','MedLink','YER' where not exists(select 1 from public.financial_companies);
+
+insert into public.financial_fiscal_years(company_id,year_code,start_date,end_date)
+select c.id,'2026','2026-01-01','2026-12-31' from public.financial_companies c
+where not exists(select 1 from public.financial_fiscal_years y where y.company_id=c.id and y.year_code='2026');
+
+insert into public.financial_periods(fiscal_year_id,period_number,name,start_date,end_date)
+select y.id,m.n,m.name,make_date(2026,m.n,1),case when m.n=12 then date '2026-12-31' else (make_date(2026,m.n+1,1)-1) end
+from public.financial_fiscal_years y cross join (values(1,'يناير'),(2,'فبراير'),(3,'مارس'),(4,'أبريل'),(5,'مايو'),(6,'يونيو'),(7,'يوليو'),(8,'أغسطس'),(9,'سبتمبر'),(10,'أكتوبر'),(11,'نوفمبر'),(12,'ديسمبر')) m(n,name)
+where y.year_code='2026' and not exists(select 1 from public.financial_periods p where p.fiscal_year_id=y.id and p.period_number=m.n);
+
+insert into public.financial_accounts(company_id,code,name,account_type,level,is_postable,normal_balance)
+select c.id,x.code,x.name,x.t,x.level,x.postable,x.balance from public.financial_companies c cross join (values
+('1000','الأصول','asset',1,false,'debit'),('1100','الأصول المتداولة','asset',2,false,'debit'),('1110','الصندوق','asset',3,true,'debit'),('1120','البنوك','asset',3,true,'debit'),('1130','العملاء والذمم المدينة','asset',3,true,'debit'),('1140','المخزون','asset',3,true,'debit'),('1200','الأصول الثابتة','asset',2,false,'debit'),('2000','الالتزامات','liability',1,false,'credit'),('2100','الموردون والذمم الدائنة','liability',2,true,'credit'),('3000','حقوق الملكية','equity',1,true,'credit'),('4000','الإيرادات','revenue',1,true,'credit'),('5000','تكلفة المبيعات','cogs',1,true,'debit'),('6000','المصروفات','expense',1,true,'debit')
+) x(code,name,t,level,postable,balance) where not exists(select 1 from public.financial_accounts a where a.company_id=c.id and a.code=x.code);
+
+-- سياسات قابلة لإعادة التشغيل بأمان.
+drop policy if exists financial_years_access on public.financial_fiscal_years;
+create policy financial_years_access on public.financial_fiscal_years for all using(public.current_user_role() in('company_director','accountant')) with check(public.current_user_role() in('company_director','accountant'));
+drop policy if exists financial_periods_access on public.financial_periods;
+create policy financial_periods_access on public.financial_periods for all using(public.current_user_role() in('company_director','accountant')) with check(public.current_user_role() in('company_director','accountant'));
+drop policy if exists financial_cost_centers_access on public.financial_cost_centers;
+create policy financial_cost_centers_access on public.financial_cost_centers for all using(public.current_user_role() in('company_director','accountant')) with check(public.current_user_role() in('company_director','accountant'));
+drop policy if exists financial_cash_access on public.financial_cash_accounts;
+create policy financial_cash_access on public.financial_cash_accounts for all using(public.current_user_role() in('company_director','accountant')) with check(public.current_user_role() in('company_director','accountant'));
+drop policy if exists financial_bank_access on public.financial_bank_accounts;
+create policy financial_bank_access on public.financial_bank_accounts for all using(public.current_user_role() in('company_director','accountant')) with check(public.current_user_role() in('company_director','accountant'));
+drop policy if exists financial_documents_access on public.financial_documents;
+create policy financial_documents_access on public.financial_documents for all using(public.current_user_role() in('company_director','accountant')) with check(public.current_user_role() in('company_director','accountant'));
+drop policy if exists financial_journal_access on public.financial_journal_entries;
+create policy financial_journal_access on public.financial_journal_entries for all using(public.current_user_role() in('company_director','accountant')) with check(public.current_user_role() in('company_director','accountant'));
+drop policy if exists financial_journal_lines_access on public.financial_journal_lines;
+create policy financial_journal_lines_access on public.financial_journal_lines for all using(public.current_user_role() in('company_director','accountant')) with check(public.current_user_role() in('company_director','accountant'));
+drop policy if exists financial_receipts_access on public.financial_receipts;
+create policy financial_receipts_access on public.financial_receipts for all using(public.current_user_role() in('company_director','accountant')) with check(public.current_user_role() in('company_director','accountant'));
+drop policy if exists financial_suppliers_access on public.financial_suppliers;
+create policy financial_suppliers_access on public.financial_suppliers for all using(public.current_user_role() in('company_director','accountant')) with check(public.current_user_role() in('company_director','accountant'));
+drop policy if exists financial_supplier_bills_access on public.financial_supplier_bills;
+create policy financial_supplier_bills_access on public.financial_supplier_bills for all using(public.current_user_role() in('company_director','accountant')) with check(public.current_user_role() in('company_director','accountant'));
+drop policy if exists financial_supplier_payments_access on public.financial_supplier_payments;
+create policy financial_supplier_payments_access on public.financial_supplier_payments for all using(public.current_user_role() in('company_director','accountant')) with check(public.current_user_role() in('company_director','accountant'));
+drop policy if exists financial_cash_movements_access on public.financial_cash_movements;
+create policy financial_cash_movements_access on public.financial_cash_movements for all using(public.current_user_role() in('company_director','accountant')) with check(public.current_user_role() in('company_director','accountant'));
+drop policy if exists financial_bank_movements_access on public.financial_bank_movements;
+create policy financial_bank_movements_access on public.financial_bank_movements for all using(public.current_user_role() in('company_director','accountant')) with check(public.current_user_role() in('company_director','accountant'));
+drop policy if exists financial_reconciliation_access on public.financial_bank_reconciliations;
+create policy financial_reconciliation_access on public.financial_bank_reconciliations for all using(public.current_user_role() in('company_director','accountant')) with check(public.current_user_role() in('company_director','accountant'));
+drop policy if exists financial_inventory_access on public.financial_inventory_movements;
+create policy financial_inventory_access on public.financial_inventory_movements for all using(public.current_user_role() in('company_director','accountant')) with check(public.current_user_role() in('company_director','accountant'));
+drop policy if exists financial_stock_counts_access on public.financial_stock_counts;
+create policy financial_stock_counts_access on public.financial_stock_counts for all using(public.current_user_role() in('company_director','accountant')) with check(public.current_user_role() in('company_director','accountant'));
+drop policy if exists financial_stock_count_lines_access on public.financial_stock_count_lines;
+create policy financial_stock_count_lines_access on public.financial_stock_count_lines for all using(public.current_user_role() in('company_director','accountant')) with check(public.current_user_role() in('company_director','accountant'));
+drop policy if exists financial_expenses_access on public.financial_expenses;
+create policy financial_expenses_access on public.financial_expenses for all using(public.current_user_role() in('company_director','accountant')) with check(public.current_user_role() in('company_director','accountant'));
+drop policy if exists financial_assets_access on public.financial_fixed_assets;
+create policy financial_assets_access on public.financial_fixed_assets for all using(public.current_user_role() in('company_director','accountant')) with check(public.current_user_role() in('company_director','accountant'));
+drop policy if exists financial_budgets_access on public.financial_budgets;
+create policy financial_budgets_access on public.financial_budgets for all using(public.current_user_role()='company_director') with check(public.current_user_role()='company_director');
+drop policy if exists financial_budget_lines_access on public.financial_budget_lines;
+create policy financial_budget_lines_access on public.financial_budget_lines for all using(public.current_user_role()='company_director') with check(public.current_user_role()='company_director');
+drop policy if exists financial_audit_access on public.financial_audit_logs;
+create policy financial_audit_access on public.financial_audit_logs for select using(public.current_user_role()='company_director');
+
+-- 0006 had a direct policy on accounts; make it idempotent too.
+drop policy if exists financial_read_director_accountant on public.financial_accounts;
+create policy financial_read_director_accountant on public.financial_accounts for select using(public.current_user_role() in('company_director','accountant'));
+drop policy if exists financial_write_director_accountant on public.financial_accounts;
+create policy financial_write_director_accountant on public.financial_accounts for all using(public.current_user_role() in('company_director','accountant')) with check(public.current_user_role() in('company_director','accountant'));
+
+-- 0008: report views + indexes
+-- حماية واجهات التقارير من خلال security_invoker.
+alter view public.financial_general_ledger set (security_invoker = true);
+alter view public.financial_trial_balance set (security_invoker = true);
+alter view public.financial_branch_profitability set (security_invoker = true);
+create index if not exists financial_journal_entries_period_idx on public.financial_journal_entries(period_id,status);
+create index if not exists financial_journal_lines_account_idx on public.financial_journal_lines(account_id);
+create index if not exists financial_receipts_client_idx on public.financial_receipts(client_id,receipt_date);
+create index if not exists financial_inventory_product_idx on public.financial_inventory_movements(product_id,movement_date);
+
+commit;
