@@ -48,11 +48,13 @@ create table if not exists public.payout_line_items (
 alter table public.payout_documents enable row level security;
 alter table public.payout_line_items enable row level security;
 
+drop policy if exists "director payout_documents all" on public.payout_documents;
 create policy "director payout_documents all"
   on public.payout_documents for all
   using (exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'company_director'))
   with check (exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'company_director'));
 
+drop policy if exists "director payout_line_items all" on public.payout_line_items;
 create policy "director payout_line_items all"
   on public.payout_line_items for all
   using (exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'company_director'))
