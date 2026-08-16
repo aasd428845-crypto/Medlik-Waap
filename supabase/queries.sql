@@ -76,7 +76,9 @@ order by receipt_date desc
 limit 20;
 
 -- ── 7) المصروفات والصرف (تعريفة من الفئات) ──────────────────
-select e.expense_number, e.expense_date, e.amount, e.payment_method, e.status,
+select e.expense_number, e.expense_date, e.amount,
+       case when e.cash_account_id is not null then 'cash' else 'bank' end as payment_method,
+       e.status,
        a.code as فئة, a.name as اسم_الفئة, e.description
 from financial_expenses e
 left join financial_accounts a on a.id = e.category_account_id
