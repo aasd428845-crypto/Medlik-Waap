@@ -91,7 +91,8 @@ async function fetchFinancialDashboard(): Promise<FinancialDashboardData> {
     { data: revNow },
     { data: revPrev },
     { data: clients },
-    { data: exchangeRows },
+    { data: usdRates },
+    { data: sarRates },
     { data: revenueRows },
     { data: marginRows },
     { data: rawBranchProfit },
@@ -106,7 +107,8 @@ async function fetchFinancialDashboard(): Promise<FinancialDashboardData> {
     supabase.from('orders').select('total_amount').in('status', ['Invoiced', 'Delivered']).gte('created_at', daysAgo(30)),
     supabase.from('orders').select('total_amount').in('status', ['Invoiced', 'Delivered']).lt('created_at', daysAgo(30)).gte('created_at', daysAgo(60)),
     supabase.from('users').select('current_balance').eq('role', 'client'),
-    supabase.from('financial_exchange_rates').select('from_currency_code, to_currency_code, rate, effective_date').order('effective_date', { ascending: false }).limit(8),
+    supabase.from('financial_exchange_rates').select('rate_to_yer, fetched_at').eq('currency_code', 'USD').order('fetched_at', { ascending: false }).limit(2),
+    supabase.from('financial_exchange_rates').select('rate_to_yer, fetched_at').eq('currency_code', 'SAR').order('fetched_at', { ascending: false }).limit(2),
     supabase.from('orders').select('total_amount, created_at').in('status', ['Invoiced', 'Delivered']).gte('created_at', daysAgo(365)),
     supabase
       .from('financial_journal_entries')
@@ -157,13 +159,14 @@ async function fetchFinancialDashboard(): Promise<FinancialDashboardData> {
   }
   const netCashFlow = cashInflow - cashOutflow;
 
-  // سعر الصرف: أحدث سعرين لكل زوج مع قيم احتياطية واقعية لليمن
-  const rate = (from: string, to: string, defaultRate: number, defaultPrev: number) => {
-    const rows = ((exchangeRows ?? []) as Array<Record<string, unknown>>).filter((r) => r.from_currency_code === from && r.to_currency_code === to);
-    const latest = Number(rows[0]?.rate ?? defaultRate);
-    const prev = Number(rows[1]?.rate ?? defaultPrev);
-    const minutesAgo = rows[0]?.effective_date
-      ? Math.max(0, Math.round((Date.now() - new Date(String(rows[0].effective_date)).getTime()) / 60_000))
+  // سعر الصرف: أحدث سجلين لكل عملة (fetched_at desc) مع قيم احتياطية واقعية لليمن
+  const liveRate = (rows: unknown[] | null, defaultRate: number, defaultPrev: number) => {
+    const list = (rows ?? []) as Array<Record<string, unknown>>;
+    const latest = Number(list[0]?.rate_to_yer ?? defaultRate);
+    const prev = Number(list[1]?.rate_to_yer ?? list[0]?.rate_to_yer ?? defaultPrev);
+    const fetched = list[0]?.fetched_at;
+    const minutesAgo = fetched
+      ? Math.max(0, Math.round((Date.now() - new Date(String(fetched)).getTime()) / 60_000))
       : 12;
     return { rate: latest, prevRate: prev, minutesAgo };
   };
@@ -257,8 +260,8 @@ async function fetchFinancialDashboard(): Promise<FinancialDashboardData> {
       receivablesTotal: { value: receivablesTotal, deltaPct: -2.1 },
     },
     exchangeRates: {
-      usdYer: rate('USD', 'YER', 530.5, 528.0),
-      sarYer: rate('SAR', 'YER', 140.2, 139.5),
+      usdYer: liveRate(usdRates, 530.5, 528.0),
+      sarYer: liveRate(sarRates, 140.2, 139.5),
     },
     revenue12m,
     branchProfit,
