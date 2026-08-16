@@ -38,6 +38,7 @@ const navItems = [
   { to: '/director/financial/receipts', label: 'السندات', icon: ArrowDownLeft, group: 'المالية' },
   { to: '/director/financial/journal', label: 'دفتر اليومية', icon: BookOpenText, group: 'المالية' },
   { to: '/director/financial', label: 'الإدارة المالية', icon: Landmark, group: 'المالية' },
+  { to: '/director/financial/dashboard', label: 'اللوحة المالية', icon: BarChart3, group: 'المالية' },
   { to: '/director/receivables', label: 'الذمم المدينة', icon: Wallet, group: 'المالية' },
   { to: '/director/send-notification', label: 'إرسال إشعار', icon: Bell, group: 'المركز' },
 ];
