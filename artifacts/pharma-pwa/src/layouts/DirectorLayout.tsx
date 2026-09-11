@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   LayoutList,
   LogOut,
+  Menu,
   Pill,
   Receipt,
   Search,
@@ -21,6 +22,15 @@ import {
   Users,
   Wallet,
 } from 'lucide-react';
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 
 const navItems = [
   { to: '/director/dashboard', label: 'لوحة القيادة', icon: LayoutDashboard, group: 'المركز' },
@@ -49,11 +59,52 @@ function getPageTitle(pathname: string) {
   return navItems.find((item) => pathname.startsWith(item.to))?.label ?? 'لوحة القيادة';
 }
 
+function NavigationLinks({ onNavigate }: { onNavigate?: () => void }) {
+  const groups = Array.from(new Set(navItems.map((item) => item.group)));
+
+  return (
+    <>
+      {groups.map((group) => (
+        <div key={group} className="mb-5">
+          <p className="mb-2 px-3 text-[10px] font-bold tracking-[0.15em] text-muted-foreground/70">{group}</p>
+          <div className="space-y-1">
+            {navItems.filter((item) => item.group === group).map((item) => {
+              const link = (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  onClick={onNavigate}
+                  className={({ isActive }) =>
+                    `group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold transition-all duration-200 ${
+                      isActive
+                        ? 'bg-primary/10 text-primary shadow-[inset_0_0_0_1px_hsl(var(--primary)/.18)]'
+                        : 'text-sidebar-foreground/65 hover:bg-white/[0.045] hover:text-sidebar-foreground'
+                    }`
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      {isActive && <span className="absolute bottom-2 top-2 right-0 w-0.5 rounded-full bg-primary shadow-[0_0_10px_hsl(var(--primary))]" />}
+                      <item.icon className="h-[17px] w-[17px] shrink-0" strokeWidth={isActive ? 2.2 : 1.8} />
+                      <span>{item.label}</span>
+                    </>
+                  )}
+                </NavLink>
+              );
+
+              return onNavigate ? <SheetClose asChild key={item.to}>{link}</SheetClose> : link;
+            })}
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
 export function DirectorLayout() {
   const { userProfile, logout } = useAuth();
   const location = useLocation();
   const pageTitle = getPageTitle(location.pathname);
-  const groups = Array.from(new Set(navItems.map((item) => item.group)));
 
   return (
     <div className="director-shell flex min-h-[100dvh] flex-col text-foreground">
@@ -85,36 +136,9 @@ export function DirectorLayout() {
             </div>
           </div>
 
-          <nav className="director-scrollbar flex-1 overflow-y-auto px-3 py-5">
-            {groups.map((group) => (
-              <div key={group} className="mb-5">
-                <p className="mb-2 px-3 text-[10px] font-bold tracking-[0.15em] text-muted-foreground/70">{group}</p>
-                <div className="space-y-1">
-                  {navItems.filter((item) => item.group === group).map((item) => (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      className={({ isActive }) =>
-                        `group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold transition-all duration-200 ${
-                          isActive
-                            ? 'bg-primary/10 text-primary shadow-[inset_0_0_0_1px_hsl(var(--primary)/.18)]'
-                            : 'text-sidebar-foreground/65 hover:bg-white/[0.045] hover:text-sidebar-foreground'
-                        }`
-                      }
-                    >
-                      {({ isActive }) => (
-                        <>
-                          {isActive && <span className="absolute bottom-2 top-2 right-0 w-0.5 rounded-full bg-primary shadow-[0_0_10px_hsl(var(--primary))]" />}
-                          <item.icon className="h-[17px] w-[17px] shrink-0" strokeWidth={isActive ? 2.2 : 1.8} />
-                          <span>{item.label}</span>
-                        </>
-                      )}
-                    </NavLink>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </nav>
+           <nav className="director-scrollbar flex-1 overflow-y-auto px-3 py-5">
+             <NavigationLinks />
+           </nav>
 
           <div className="border-t border-sidebar-border p-3">
             <button onClick={logout} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-xs font-semibold text-destructive/80 transition-colors hover:bg-destructive/10 hover:text-destructive">
@@ -127,6 +151,33 @@ export function DirectorLayout() {
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="relative z-10 flex h-[74px] shrink-0 items-center justify-between border-b border-border/80 bg-background/80 px-4 backdrop-blur-xl md:px-8">
             <div className="flex items-center gap-3">
+               <Sheet>
+                 <SheetTrigger asChild>
+                   <button
+                     type="button"
+                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-primary shadow-[0_0_18px_hsl(var(--primary)/.1)] transition-colors hover:bg-primary/15 focus:outline-none focus:ring-2 focus:ring-ring md:hidden"
+                     aria-label="فتح قائمة لوحة التحكم"
+                   >
+                     <Menu className="h-5 w-5" />
+                   </button>
+                 </SheetTrigger>
+                 <SheetContent side="right" className="w-[min(88vw,360px)] border-l border-sidebar-border bg-sidebar p-0 text-sidebar-foreground">
+                   <SheetHeader className="border-b border-sidebar-border px-5 pb-5 pt-6 text-right">
+                     <SheetTitle className="flex items-center gap-3 text-right text-sidebar-foreground">
+                       <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/40 bg-primary/10 text-primary">
+                         <Pill className="h-5 w-5" strokeWidth={1.8} />
+                       </span>
+                       <span>خيارات لوحة التحكم</span>
+                     </SheetTitle>
+                     <SheetDescription className="pr-[52px] text-right text-xs text-muted-foreground">
+                       الوصول إلى جميع أقسام مركز القيادة
+                     </SheetDescription>
+                   </SheetHeader>
+                   <nav className="director-scrollbar h-[calc(100dvh-112px)] overflow-y-auto px-3 py-5">
+                     <NavigationLinks onNavigate={() => undefined} />
+                   </nav>
+                 </SheetContent>
+               </Sheet>
               <div>
                 <div className="flex items-center gap-2 text-[10px] font-semibold text-muted-foreground">
                   <span>مركز القيادة</span><span className="text-primary">/</span><span className="text-primary">{pageTitle}</span>
