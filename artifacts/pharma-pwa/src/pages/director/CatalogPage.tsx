@@ -4,7 +4,9 @@ import { PharmaProduct } from '@/types/models';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { Search, Plus, Edit2, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { CatalogImportDialog } from '@/components/director/CatalogImportDialog';
+import { CatalogImportValues, catalogProductPayload } from '@/lib/catalogImport';
+import { Search, Plus, Edit2, Trash2, CheckCircle, XCircle, Upload } from 'lucide-react';
 
 function mapRowToProduct(row: Record<string, unknown>): PharmaProduct {
   return {
@@ -29,18 +31,68 @@ function productToDbPayload(p: Omit<PharmaProduct, 'productId'>) {
   return {
     sku: p.sku,
     commercial_name: p.commercialName,
-    scientific_name: p.scientificName,
-    manufacturer: p.manufacturer,
+    scientific_name: p.scientificName || null,
+    manufacturer: p.manufacturer || null,
     dosage_form: p.dosageForm,
-    strength: p.strength,
+    strength: p.strength || null,
     is_cold_chain: p.isColdChain,
     is_controlled_substance: p.isControlledSubstance,
     unit: p.unit,
     pack_size: p.packSize,
     price: p.price,
-    description: p.description,
+    description: p.description || null,
     is_active: p.isActive,
+    // These columns are required by the shared Flutter schema.
+    name: p.commercialName,
+    name_en: p.scientificName || null,
+    category: p.dosageForm || 'أخرى',
+    unit_price: p.price,
   };
+}
+
+function databaseErrorMessage(error: unknown): { message: string; field?: string } {
+  const rawMessage = error instanceof Error ? error.message : String(error);
+  const normalized = rawMessage.toLowerCase();
+  const columnMatch = rawMessage.match(/column ["']([^"']+)["']/i);
+  const column = columnMatch?.[1];
+  const fieldMap: Record<string, string> = {
+    sku: 'sku',
+    commercial_name: 'commercialName',
+    name: 'commercialName',
+    scientific_name: 'scientificName',
+    manufacturer: 'manufacturer',
+    dosage_form: 'dosageForm',
+    category: 'dosageForm',
+    strength: 'strength',
+    unit: 'unit',
+    pack_size: 'packSize',
+    price: 'price',
+    unit_price: 'price',
+    description: 'description',
+  };
+
+  if (normalized.includes('duplicate key') && normalized.includes('sku')) {
+    return { field: 'sku', message: 'هذا SKU مستخدم مسبقًا. استخدم SKU مختلفًا أو افتح المنتج الموجود للتعديل.' };
+  }
+  if (column && fieldMap[column]) {
+    const labels: Record<string, string> = {
+      sku: 'SKU',
+      commercialName: 'الاسم التجاري',
+      scientificName: 'الاسم العلمي',
+      manufacturer: 'الشركة المصنعة',
+      dosageForm: 'الشكل الدوائي',
+      strength: 'التركيز',
+      unit: 'الوحدة',
+      packSize: 'حجم العبوة',
+      price: 'السعر',
+      description: 'الوصف',
+    };
+    return { field: fieldMap[column], message: `حقل ${labels[fieldMap[column]]} مطلوب لإكمال حفظ المنتج.` };
+  }
+  if (normalized.includes('row-level security') || normalized.includes('permission denied')) {
+    return { message: 'ليس لديك صلاحية حفظ المنتجات. تأكد من الدخول بحساب المدير العام.' };
+  }
+  return { message: 'تعذر حفظ المنتج. راجع القيم المدخلة وتأكد من اتصال قاعدة البيانات ثم حاول مرة أخرى.' };
 }
 
 export function CatalogPage() {
@@ -55,6 +107,9 @@ export function CatalogPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<PharmaProduct | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState('');
 
   useEffect(() => { fetchProducts(); }, []);
 
@@ -108,6 +163,8 @@ export function CatalogPage() {
   };
 
   const openAdd = () => {
+    setFieldErrors({});
+    setFormError('');
     setEditingProduct({
       productId: '',
       sku: '',
@@ -130,6 +187,22 @@ export function CatalogPage() {
   const saveProduct = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!editingProduct) return;
+    setFieldErrors({});
+    setFormError('');
+
+    const validationErrors: Record<string, string> = {};
+    if (!editingProduct.sku.trim()) validationErrors.sku = 'أدخل SKU أو الباركود الخاص بالمنتج.';
+    if (!editingProduct.commercialName.trim()) validationErrors.commercialName = 'أدخل الاسم التجاري للمنتج.';
+    if (!editingProduct.dosageForm.trim()) validationErrors.dosageForm = 'اختر الشكل الدوائي للمنتج.';
+    if (!editingProduct.unit.trim()) validationErrors.unit = 'أدخل وحدة البيع مثل علبة أو شريط.';
+    if (!Number.isInteger(editingProduct.packSize) || editingProduct.packSize < 1) validationErrors.packSize = 'حجم العبوة يجب أن يكون رقمًا صحيحًا أكبر من صفر.';
+    if (!Number.isFinite(editingProduct.price) || editingProduct.price < 0) validationErrors.price = 'السعر يجب أن يكون رقمًا يساوي صفرًا أو أكبر.';
+    if (Object.keys(validationErrors).length > 0) {
+      setFieldErrors(validationErrors);
+      setFormError('راجع الحقول المحددة أدناه ثم حاول حفظ المنتج مرة أخرى.');
+      return;
+    }
+
     try {
       const { productId, ...rest } = editingProduct;
       const payload = productToDbPayload(rest);
@@ -146,24 +219,52 @@ export function CatalogPage() {
       setIsModalOpen(false);
     } catch (err) {
       console.error(err);
-      alert('حدث خطأ أثناء الحفظ');
+      const friendlyError = databaseErrorMessage(err);
+      if (friendlyError.field) {
+        setFieldErrors({ [friendlyError.field]: friendlyError.message });
+      } else {
+        setFormError(friendlyError.message);
+      }
     }
+  };
+
+  const importProducts = async (rows: CatalogImportValues[]) => {
+    const { error: err } = await supabase
+      .from('products')
+      .upsert(rows.map(catalogProductPayload), { onConflict: 'sku' });
+    if (err) {
+      const friendlyError = databaseErrorMessage(err);
+      throw new Error(friendlyError.message);
+    }
+    await fetchProducts();
+    setIsImportOpen(false);
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h2 className="text-2xl font-bold text-foreground">كتالوج المنتجات</h2>
           <p className="text-muted-foreground text-sm">إدارة الأدوية والأصناف في النظام</p>
         </div>
-        <button
-          onClick={openAdd}
-          className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          إضافة منتج
-        </button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <button
+            type="button"
+            onClick={() => setIsImportOpen(true)}
+            className="flex items-center justify-center gap-2 rounded-lg border border-primary/40 bg-primary/5 px-4 py-2 font-medium text-primary transition-colors hover:bg-primary/10"
+          >
+            <Upload className="h-4 w-4" />
+            استيراد منتجات (Excel/CSV)
+          </button>
+          <button
+            type="button"
+            onClick={openAdd}
+            className="flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+          >
+            <Plus className="h-4 w-4" />
+            إضافة منتج
+          </button>
+        </div>
       </div>
 
       <div className="bg-card border rounded-xl shadow-sm">
@@ -298,6 +399,12 @@ export function CatalogPage() {
         confirmLabel="حذف"
       />
 
+      <CatalogImportDialog
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        onConfirm={importProducts}
+      />
+
       {/* Add/Edit Modal */}
       {isModalOpen && editingProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
@@ -310,24 +417,33 @@ export function CatalogPage() {
             </div>
 
             <form onSubmit={saveProduct} className="p-6">
+              {formError && (
+                <div className="mb-5 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm font-semibold text-destructive" role="alert">
+                  {formError}
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">الباركود / SKU *</label>
-                  <input required className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                  {fieldErrors.sku && <p className="text-xs font-semibold text-destructive">{fieldErrors.sku}</p>}
+                  <input aria-invalid={!!fieldErrors.sku} className={`w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-primary ${fieldErrors.sku ? 'border-destructive' : ''}`}
                     value={editingProduct.sku} onChange={e => setEditingProduct({ ...editingProduct, sku: e.target.value })} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">الاسم التجاري *</label>
-                  <input required className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                  {fieldErrors.commercialName && <p className="text-xs font-semibold text-destructive">{fieldErrors.commercialName}</p>}
+                  <input aria-invalid={!!fieldErrors.commercialName} className={`w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-primary ${fieldErrors.commercialName ? 'border-destructive' : ''}`}
                     value={editingProduct.commercialName} onChange={e => setEditingProduct({ ...editingProduct, commercialName: e.target.value })} />
                 </div>
                 <div className="space-y-1.5 md:col-span-2">
                   <label className="text-sm font-medium">الاسم العلمي</label>
+                  {fieldErrors.scientificName && <p className="text-xs font-semibold text-destructive">{fieldErrors.scientificName}</p>}
                   <input className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary text-left" dir="ltr"
                     value={editingProduct.scientificName} onChange={e => setEditingProduct({ ...editingProduct, scientificName: e.target.value })} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">الشكل الدوائي</label>
+                  {fieldErrors.dosageForm && <p className="text-xs font-semibold text-destructive">{fieldErrors.dosageForm}</p>}
                   <select className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
                     value={editingProduct.dosageForm} onChange={e => setEditingProduct({ ...editingProduct, dosageForm: e.target.value })}>
                     {['أقراص','كبسول','شراب','حقن','بخاخ','كريم','مرهم','قطرة','أخرى'].map(f => <option key={f} value={f}>{f}</option>)}
@@ -340,26 +456,31 @@ export function CatalogPage() {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">الشركة المصنعة</label>
+                  {fieldErrors.manufacturer && <p className="text-xs font-semibold text-destructive">{fieldErrors.manufacturer}</p>}
                   <input className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
                     value={editingProduct.manufacturer} onChange={e => setEditingProduct({ ...editingProduct, manufacturer: e.target.value })} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">السعر (العملة المحلية)</label>
-                  <input type="number" step="0.01" min="0" required className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                  {fieldErrors.price && <p className="text-xs font-semibold text-destructive">{fieldErrors.price}</p>}
+                  <input aria-invalid={!!fieldErrors.price} type="number" step="0.01" min="0" className={`w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-primary ${fieldErrors.price ? 'border-destructive' : ''}`}
                     value={editingProduct.price} onChange={e => setEditingProduct({ ...editingProduct, price: parseFloat(e.target.value) || 0 })} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">الوحدة (مثال: علبة، شريط)</label>
+                  {fieldErrors.unit && <p className="text-xs font-semibold text-destructive">{fieldErrors.unit}</p>}
                   <input className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
                     value={editingProduct.unit} onChange={e => setEditingProduct({ ...editingProduct, unit: e.target.value })} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">حجم العبوة (رقم)</label>
-                  <input type="number" min="1" className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                  {fieldErrors.packSize && <p className="text-xs font-semibold text-destructive">{fieldErrors.packSize}</p>}
+                  <input aria-invalid={!!fieldErrors.packSize} type="number" min="1" className={`w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-primary ${fieldErrors.packSize ? 'border-destructive' : ''}`}
                     value={editingProduct.packSize} onChange={e => setEditingProduct({ ...editingProduct, packSize: parseInt(e.target.value) || 1 })} />
                 </div>
                 <div className="md:col-span-2 space-y-1.5">
                   <label className="text-sm font-medium">الوصف</label>
+                  {fieldErrors.description && <p className="text-xs font-semibold text-destructive">{fieldErrors.description}</p>}
                   <textarea rows={3} className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary resize-none"
                     value={editingProduct.description || ''} onChange={e => setEditingProduct({ ...editingProduct, description: e.target.value })} />
                 </div>

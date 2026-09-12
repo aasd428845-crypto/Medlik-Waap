@@ -11,7 +11,7 @@ export function InventoryOverviewPage() {
 
   const [products, setProducts] = useState<PharmaProduct[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [inventory, setInventory] = useState<Record<string, Record<string, number>>>({}); // sku -> branchId -> qty
+  const [inventory, setInventory] = useState<Record<string, Record<string, number>>>({}); // productId -> branchId -> qty
 
   const [lowStockOnly, setLowStockOnly] = useState(false);
 
@@ -47,7 +47,8 @@ export function InventoryOverviewPage() {
         // 2. Branches
         const { data: bData, error: bErr } = await supabase
           .from('branches')
-          .select('id, name, governorate, latitude, longitude');
+          .select('id, name, governorate, latitude, longitude, is_active')
+          .eq('is_active', true);
         if (bErr) throw bErr;
 
         const bList: Branch[] = (bData ?? []).map(row => ({
@@ -62,15 +63,16 @@ export function InventoryOverviewPage() {
         // 3. Inventory pivot
         const { data: invData, error: invErr } = await supabase
           .from('warehouse_inventory')
-          .select('sku, branch_id, available_quantity');
+          .select('product_id, branch_id, quantity');
         if (invErr) throw invErr;
 
         const invMap: Record<string, Record<string, number>> = {};
         for (const row of (invData ?? [])) {
-          const sku: string = row.sku ?? '';
+          const productId: string = row.product_id ?? '';
           const branchId: string = row.branch_id ?? '';
-          if (!invMap[sku]) invMap[sku] = {};
-          invMap[sku][branchId] = row.available_quantity ?? 0;
+          if (!productId || !branchId) continue;
+          if (!invMap[productId]) invMap[productId] = {};
+          invMap[productId][branchId] = (invMap[productId][branchId] ?? 0) + (row.quantity ?? 0);
         }
         setInventory(invMap);
 
@@ -86,7 +88,7 @@ export function InventoryOverviewPage() {
 
   const displayProducts = products.filter(p => {
     if (!lowStockOnly) return true;
-    return branches.some(b => (inventory[p.sku]?.[b.branchId] ?? 0) < 10);
+    return branches.some(b => (inventory[p.productId]?.[b.branchId] ?? 0) < 10);
   });
 
   if (loading) return <LoadingSpinner />;
@@ -138,7 +140,7 @@ export function InventoryOverviewPage() {
                     </div>
                   </td>
                   {branches.map(b => {
-                    const qty = inventory[p.sku]?.[b.branchId] ?? 0;
+                    const qty = inventory[p.productId]?.[b.branchId] ?? 0;
                     const isLow = qty < 10;
                     return (
                       <td key={b.branchId} className={`px-4 py-3 text-center border-l last:border-l-0 ${isLow ? 'bg-red-50/50 text-red-700 font-bold' : ''}`}>
