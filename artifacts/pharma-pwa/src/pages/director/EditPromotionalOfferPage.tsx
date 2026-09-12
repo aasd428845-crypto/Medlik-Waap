@@ -22,6 +22,7 @@ export function EditPromotionalOfferPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [submitError, setSubmitError] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -60,12 +61,13 @@ export function EditPromotionalOfferPage() {
   const handleSubmit = async (input: OfferInput) => {
     if (!id) return;
     setBusy(true);
+    setSubmitError('');
     try {
       await updatePromotionalOffer(id, input);
       setSuccessMsg('تم تحديث العرض بنجاح.');
       window.setTimeout(() => navigate('/director/promotional-offers'), 1200);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء تحديث العرض');
+      setSubmitError(err instanceof Error ? err.message : 'حدث خطأ أثناء تحديث العرض');
     } finally {
       setBusy(false);
     }
@@ -101,6 +103,7 @@ export function EditPromotionalOfferPage() {
             extraProducts={extraProducts}
             submitLabel="حفظ التعديلات"
             busy={busy}
+            submitError={submitError}
             onSubmit={handleSubmit}
           />
         </div>

@@ -23,6 +23,7 @@ interface Props {
   extraProducts?: OfferProduct[];
   submitLabel: string;
   busy: boolean;
+  submitError?: string;
   onSubmit: (input: OfferInput) => void;
 }
 
@@ -30,7 +31,9 @@ function dateInput(v: string | null | undefined): string {
   return v ? String(v).slice(0, 10) : '';
 }
 
-export function OfferForm({ initial, extraProducts = [], submitLabel, busy, onSubmit }: Props) {
+type OfferMode = 'discount' | 'special_price' | '';
+
+export function OfferForm({ initial, extraProducts = [], submitLabel, busy, submitError, onSubmit }: Props) {
   const [products, setProducts] = useState<OfferProduct[]>([]);
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [loadError, setLoadError] = useState('');
@@ -45,6 +48,10 @@ export function OfferForm({ initial, extraProducts = [], submitLabel, busy, onSu
   const [startDate, setStartDate] = useState(dateInput(initial?.start_date));
   const [endDate, setEndDate] = useState(dateInput(initial?.end_date));
   const [governorate, setGovernorate] = useState(initial?.target_governorate ?? '');
+  const [mode, setMode] = useState<OfferMode>(
+    initial?.discount_percent != null ? 'discount' : initial?.special_price != null ? 'special_price' : '',
+  );
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     (async () => {
@@ -71,35 +78,35 @@ export function OfferForm({ initial, extraProducts = [], submitLabel, busy, onSu
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
+    const errors: Record<string, string> = {};
     if (!productId) {
-      alert('يرجى اختيار الصنف الذي سيُطبَّق عليه العرض.');
-      return;
+      errors.product = 'يرجى اختيار الصنف الذي سيُطبَّق عليه العرض.';
     }
-    const hasDiscount = discountText.trim() !== '';
-    const hasPrice = priceText.trim() !== '';
-    if (hasDiscount === hasPrice) {
-      alert('اختر طريقة واحدة: نسبة خصم أو سعر خاص.');
-      return;
+    if (!mode) {
+      errors.mode = 'اختر طريقة واحدة للعرض: نسبة خصم أو سعر خاص.';
     }
+    const hasDiscount = mode === 'discount';
+    const hasPrice = mode === 'special_price';
     const discountValue = hasDiscount ? Number(discountText) : null;
     const priceValue = hasPrice ? Number(priceText) : null;
-    if (hasDiscount && (Number.isNaN(discountValue) || discountValue! <= 0 || discountValue! > 100)) {
-      alert('نسبة الخصم يجب أن تكون بين 1 و 100.');
-      return;
+    if (hasDiscount && (discountText.trim() === '' || Number.isNaN(discountValue) || discountValue! <= 0 || discountValue! > 100)) {
+      errors.discount = 'أدخل نسبة خصم بين 1 و100.';
     }
-    if (hasPrice && (Number.isNaN(priceValue) || priceValue! <= 0)) {
-      alert('يرجى إدخال سعر خاص صحيح أكبر من صفر.');
-      return;
+    if (hasPrice && (priceText.trim() === '' || Number.isNaN(priceValue) || priceValue! <= 0)) {
+      errors.price = 'أدخل سعرًا خاصًا صحيحًا أكبر من صفر.';
     }
     if (!startDate) {
-      alert('يرجى تحديد تاريخ بداية العرض.');
-      return;
+      errors.startDate = 'يرجى تحديد تاريخ بداية العرض.';
     }
     if (endDate && endDate < startDate) {
-      alert('تاريخ النهاية لا يمكن أن يكون قبل تاريخ البداية.');
+      errors.endDate = 'تاريخ النهاية لا يمكن أن يكون بعد تاريخ البداية.';
+    }
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       return;
     }
 
+    setFieldErrors({});
     onSubmit({
       product_id: productId,
       discount_percent: discountValue,
@@ -112,6 +119,11 @@ export function OfferForm({ initial, extraProducts = [], submitLabel, busy, onSu
 
   return (
     <form onSubmit={handleSubmit} className="p-6 space-y-5">
+      {submitError && (
+        <div className="rounded-md border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm font-semibold text-destructive" role="alert">
+          {submitError}
+        </div>
+      )}
       {loadError && (
         <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
           {loadError}
@@ -123,7 +135,46 @@ export function OfferForm({ initial, extraProducts = [], submitLabel, busy, onSu
           <Tag className="w-4 h-4 text-primary" />
           الصنف (بحث وتحديد) *
         </label>
-        <ProductSearch products={products} value={productId} onChange={setProductId} />
+        {fieldErrors.product && <p className="text-xs font-semibold text-destructive">{fieldErrors.product}</p>}
+        <ProductSearch
+          products={products}
+          value={productId}
+          onChange={(value) => {
+            setProductId(value);
+            setFieldErrors((current) => ({ ...current, product: '' }));
+          }}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-sm font-medium">طريقة العرض *</label>
+        {fieldErrors.mode && <p className="text-xs font-semibold text-destructive">{fieldErrors.mode}</p>}
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => {
+              setMode('discount');
+              setPriceText('');
+              setFieldErrors((current) => ({ ...current, mode: '', price: '' }));
+            }}
+            className={`rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${mode === 'discount' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted'}`}
+            aria-pressed={mode === 'discount'}
+          >
+            نسبة خصم
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode('special_price');
+              setDiscountText('');
+              setFieldErrors((current) => ({ ...current, mode: '', discount: '' }));
+            }}
+            className={`rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${mode === 'special_price' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted'}`}
+            aria-pressed={mode === 'special_price'}
+          >
+            سعر خاص
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -132,14 +183,20 @@ export function OfferForm({ initial, extraProducts = [], submitLabel, busy, onSu
             <Percent className="w-4 h-4 text-primary" />
             نسبة الخصم %
           </label>
+          {fieldErrors.discount && <p className="text-xs font-semibold text-destructive">{fieldErrors.discount}</p>}
           <input
             type="number"
             min={1}
             max={100}
             dir="ltr"
-            className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary text-left"
+            disabled={mode !== 'discount'}
+            aria-invalid={!!fieldErrors.discount}
+            className={`w-full rounded-lg border px-3 py-2 text-sm text-left focus:ring-2 focus:ring-primary disabled:cursor-not-allowed disabled:bg-muted/50 ${fieldErrors.discount ? 'border-destructive' : ''}`}
             value={discountText}
-            onChange={(e) => setDiscountText(e.target.value)}
+            onChange={(e) => {
+              setDiscountText(e.target.value);
+              setFieldErrors((current) => ({ ...current, discount: '' }));
+            }}
             placeholder="مثال: 15"
           />
         </div>
@@ -148,14 +205,20 @@ export function OfferForm({ initial, extraProducts = [], submitLabel, busy, onSu
             <Wallet className="w-4 h-4 text-primary" />
             سعر خاص
           </label>
+          {fieldErrors.price && <p className="text-xs font-semibold text-destructive">{fieldErrors.price}</p>}
           <input
             type="number"
             min={0}
             step="0.01"
             dir="ltr"
-            className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary text-left"
+            disabled={mode !== 'special_price'}
+            aria-invalid={!!fieldErrors.price}
+            className={`w-full rounded-lg border px-3 py-2 text-sm text-left focus:ring-2 focus:ring-primary disabled:cursor-not-allowed disabled:bg-muted/50 ${fieldErrors.price ? 'border-destructive' : ''}`}
             value={priceText}
-            onChange={(e) => setPriceText(e.target.value)}
+            onChange={(e) => {
+              setPriceText(e.target.value);
+              setFieldErrors((current) => ({ ...current, price: '' }));
+            }}
             placeholder="مثال: 1000"
           />
           <p className="text-xs text-muted-foreground">اختر نسبة الخصم أو السعر الخاص (واحد فقط).</p>
@@ -168,13 +231,17 @@ export function OfferForm({ initial, extraProducts = [], submitLabel, busy, onSu
             <CalendarDays className="w-4 h-4 text-primary" />
             تاريخ البداية *
           </label>
+          {fieldErrors.startDate && <p className="text-xs font-semibold text-destructive">{fieldErrors.startDate}</p>}
           <input
-            required
             type="date"
             dir="ltr"
-            className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary text-left"
+            aria-invalid={!!fieldErrors.startDate}
+            className={`w-full rounded-lg border px-3 py-2 text-sm text-left focus:ring-2 focus:ring-primary ${fieldErrors.startDate ? 'border-destructive' : ''}`}
             value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+            onChange={(e) => {
+              setStartDate(e.target.value);
+              setFieldErrors((current) => ({ ...current, startDate: '' }));
+            }}
           />
         </div>
         <div className="space-y-1.5">
@@ -182,12 +249,17 @@ export function OfferForm({ initial, extraProducts = [], submitLabel, busy, onSu
             <CalendarDays className="w-4 h-4 text-primary" />
             تاريخ النهاية
           </label>
+          {fieldErrors.endDate && <p className="text-xs font-semibold text-destructive">{fieldErrors.endDate}</p>}
           <input
             type="date"
             dir="ltr"
-            className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary text-left"
+            aria-invalid={!!fieldErrors.endDate}
+            className={`w-full rounded-lg border px-3 py-2 text-sm text-left focus:ring-2 focus:ring-primary ${fieldErrors.endDate ? 'border-destructive' : ''}`}
             value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
+            onChange={(e) => {
+              setEndDate(e.target.value);
+              setFieldErrors((current) => ({ ...current, endDate: '' }));
+            }}
           />
         </div>
       </div>

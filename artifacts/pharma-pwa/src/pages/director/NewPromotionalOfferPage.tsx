@@ -9,15 +9,17 @@ export function NewPromotionalOfferPage() {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [submitError, setSubmitError] = useState('');
 
   const handleSubmit = async (input: OfferInput) => {
     setBusy(true);
+    setSubmitError('');
     try {
       await createPromotionalOffer(input);
       setSuccessMsg('تم إنشاء العرض بنجاح، وتم إرسال إشعار تلقائي للعملاء.');
       window.setTimeout(() => navigate('/director/promotional-offers'), 1200);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء إنشاء العرض');
+      setSubmitError(err instanceof Error ? err.message : 'حدث خطأ أثناء إنشاء العرض');
     } finally {
       setBusy(false);
     }
@@ -46,7 +48,7 @@ export function NewPromotionalOfferPage() {
       )}
 
       <div className="bg-card border rounded-xl shadow-sm">
-        <OfferForm submitLabel="إنشاء العرض" busy={busy} onSubmit={handleSubmit} />
+        <OfferForm submitLabel="إنشاء العرض" busy={busy} submitError={submitError} onSubmit={handleSubmit} />
       </div>
 
       <div className="space-y-2">
