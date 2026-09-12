@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -17,10 +18,12 @@ import {
   Pill,
   Receipt,
   Search,
+  Sun,
   Truck,
   UserCheck,
   Users,
   Wallet,
+  Moon,
 } from 'lucide-react';
 import {
   Sheet,
@@ -54,6 +57,12 @@ const navItems = [
 ];
 
 const mobileItems = navItems.slice(0, 4);
+const THEME_STORAGE_KEY = 'pharma-dashboard-theme';
+
+function getInitialTheme(): 'dark' | 'light' {
+  if (typeof window === 'undefined') return 'dark';
+  return window.localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark';
+}
 
 function getPageTitle(pathname: string) {
   return navItems.find((item) => pathname.startsWith(item.to))?.label ?? 'لوحة القيادة';
@@ -105,6 +114,18 @@ export function DirectorLayout() {
   const { userProfile, logout } = useAuth();
   const location = useLocation();
   const pageTitle = getPageTitle(location.pathname);
+  const [theme, setTheme] = useState<'dark' | 'light'>(getInitialTheme);
+
+  useEffect(() => {
+    const isDark = theme === 'dark';
+    document.documentElement.classList.toggle('dark', isDark);
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((current) => current === 'dark' ? 'light' : 'dark');
+  };
 
   return (
     <div className="director-shell flex min-h-[100dvh] flex-col text-foreground">
@@ -191,6 +212,18 @@ export function DirectorLayout() {
                 <span>بحث في النظام</span>
                 <kbd className="rounded border border-border px-1.5 py-0.5 text-[9px]">⌘ K</kbd>
               </div>
+               <button
+                 type="button"
+                 onClick={toggleTheme}
+                 className="flex h-9 items-center gap-2 rounded-xl border border-border bg-card/70 px-2.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring md:px-3"
+                 aria-label={theme === 'dark' ? 'تفعيل الوضع الفاتح' : 'تفعيل الوضع الليلي'}
+                 title={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الليلي'}
+               >
+                 {theme === 'dark' ? <Sun className="h-4 w-4 text-amber-500" /> : <Moon className="h-4 w-4 text-primary" />}
+                 <span className="hidden text-[11px] font-semibold md:inline">
+                   {theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الليلي'}
+                 </span>
+               </button>
               <span className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-card/70 text-muted-foreground" aria-label="الإشعارات">
                 <Bell className="h-4 w-4" />
                 <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-amber-400" />
