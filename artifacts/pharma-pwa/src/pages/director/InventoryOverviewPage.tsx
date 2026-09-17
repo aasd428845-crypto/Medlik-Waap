@@ -109,7 +109,7 @@ export function InventoryOverviewPage() {
 
       const { data: pData, error: pErr } = await supabase
         .from('products')
-        .select('id, sku, commercial_name, scientific_name, dosage_form, is_active, strength, manufacturer, is_cold_chain, is_controlled_substance, unit, pack_size, price')
+        .select('id, sku, commercial_name, scientific_name, dosage_form, is_active, strength, manufacturer, is_cold_chain, is_controlled_substance, unit, pack_size, price, image_url')
         .eq('is_active', true);
       if (pErr) throw pErr;
 
@@ -126,6 +126,7 @@ export function InventoryOverviewPage() {
         unit: row.unit ?? '',
         packSize: Number(row.pack_size ?? 1),
         price: Number(row.price ?? 0),
+        imageUrl: row.image_url ?? '',
         isActive: row.is_active ?? true,
       }));
 

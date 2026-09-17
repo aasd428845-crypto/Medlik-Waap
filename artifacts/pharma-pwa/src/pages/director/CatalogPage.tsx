@@ -22,6 +22,7 @@ function mapRowToProduct(row: Record<string, unknown>): PharmaProduct {
     unit: (row.unit as string) ?? '',
     packSize: (row.pack_size as number) ?? 1,
     price: (row.price as number) ?? 0,
+    imageUrl: (row.image_url as string) ?? '',
     description: (row.description as string) ?? '',
     isActive: (row.is_active as boolean) ?? true,
   };
@@ -40,6 +41,7 @@ function productToDbPayload(p: Omit<PharmaProduct, 'productId'>) {
     unit: p.unit,
     pack_size: p.packSize,
     price: p.price,
+    image_url: p.imageUrl.trim() || null,
     description: p.description || null,
     is_active: p.isActive,
     // These columns are required by the shared Flutter schema.
@@ -110,6 +112,7 @@ export function CatalogPage() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState('');
+  const [imageUploading, setImageUploading] = useState(false);
 
   useEffect(() => { fetchProducts(); }, []);
 
@@ -178,10 +181,39 @@ export function CatalogPage() {
       unit: '',
       packSize: 1,
       price: 0,
+      imageUrl: '',
       description: '',
       isActive: true,
     });
     setIsModalOpen(true);
+  };
+
+  const uploadProductImage = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setFormError('اختر ملف صورة صالحًا.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setFormError('حجم الصورة يجب ألا يتجاوز 5 ميجابايت.');
+      return;
+    }
+
+    try {
+      setImageUploading(true);
+      setFormError('');
+      const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const path = `products/${crypto.randomUUID()}.${extension}`;
+      const { error: uploadError } = await supabase.storage
+        .from('product-images')
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (uploadError) throw uploadError;
+      const { data } = supabase.storage.from('product-images').getPublicUrl(path);
+      setEditingProduct((current) => current ? { ...current, imageUrl: data.publicUrl } : current);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'تعذر رفع صورة المنتج.');
+    } finally {
+      setImageUploading(false);
+    }
   };
 
   const saveProduct = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -319,6 +351,7 @@ export function CatalogPage() {
             <table className="w-full text-right text-sm">
               <thead className="bg-muted/50 text-muted-foreground font-semibold border-b">
                 <tr>
+                  <th className="px-4 py-3 whitespace-nowrap">الصورة</th>
                   <th className="px-4 py-3 whitespace-nowrap">الاسم التجاري</th>
                   <th className="px-4 py-3 whitespace-nowrap">الاسم العلمي</th>
                   <th className="px-4 py-3 whitespace-nowrap">الشكل والتركيز</th>
@@ -331,6 +364,13 @@ export function CatalogPage() {
               <tbody className="divide-y divide-border">
                 {filteredProducts.map(product => (
                   <tr key={product.productId} className={`hover:bg-muted/30 transition-colors ${!product.isActive ? 'opacity-60 bg-muted/10' : ''}`}>
+                    <td className="px-4 py-3">
+                      {product.imageUrl ? (
+                        <img src={product.imageUrl} alt="" className="h-12 w-12 rounded-lg object-cover" />
+                      ) : (
+                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted text-xs text-muted-foreground">بدون</div>
+                      )}
+                    </td>
                     <td className="px-4 py-3 font-medium text-foreground">
                       <div className="flex flex-col">
                         <span>{product.commercialName}</span>
@@ -379,7 +419,7 @@ export function CatalogPage() {
                 ))}
                 {filteredProducts.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                    <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
                       لا توجد منتجات تطابق البحث.
                     </td>
                   </tr>
@@ -466,6 +506,32 @@ export function CatalogPage() {
                   <input aria-invalid={!!fieldErrors.price} type="number" step="0.01" min="0" className={`w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-primary ${fieldErrors.price ? 'border-destructive' : ''}`}
                     value={editingProduct.price} onChange={e => setEditingProduct({ ...editingProduct, price: parseFloat(e.target.value) || 0 })} />
                 </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-sm font-medium">صورة المنتج</label>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    disabled={imageUploading}
+                    className="w-full rounded-lg border px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary/10 file:px-3 file:py-1.5 file:text-primary"
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (file) void uploadProductImage(file);
+                      e.currentTarget.value = '';
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">PNG أو JPG أو WebP، بحد أقصى 5 ميجابايت.</p>
+                  <input
+                    type="url"
+                    placeholder="أو أدخل رابط الصورة مباشرة: https://..."
+                    className="w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                    dir="ltr"
+                    value={editingProduct.imageUrl}
+                    onChange={e => setEditingProduct({ ...editingProduct, imageUrl: e.target.value })}
+                  />
+                  {editingProduct.imageUrl && (
+                    <img src={editingProduct.imageUrl} alt="معاينة صورة المنتج" className="mt-2 h-20 w-20 rounded-lg object-cover" />
+                  )}
+                </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">الوحدة (مثال: علبة، شريط)</label>
                   {fieldErrors.unit && <p className="text-xs font-semibold text-destructive">{fieldErrors.unit}</p>}
@@ -507,8 +573,8 @@ export function CatalogPage() {
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm font-medium border rounded-lg hover:bg-muted">
                   إلغاء
                 </button>
-                <button type="submit" className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90">
-                  حفظ البيانات
+                <button type="submit" disabled={imageUploading} className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50">
+                  {imageUploading ? 'جارٍ رفع الصورة...' : 'حفظ البيانات'}
                 </button>
               </div>
             </form>

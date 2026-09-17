@@ -26,6 +26,7 @@ export interface PharmaProduct {
   unit: string;
   packSize: number;
   price: number;
+  imageUrl: string;
   description?: string;
   isActive: boolean;
 }
