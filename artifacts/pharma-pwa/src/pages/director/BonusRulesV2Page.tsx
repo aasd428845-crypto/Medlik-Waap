@@ -61,6 +61,9 @@ interface RuleForm {
   cash_monthly_limit: string;
   approval_required: boolean;
   product_values: Record<string, string>;
+  // Passthrough only (no UI editor): preserves the stored value on edit
+  // so saving unrelated fields never wipes it. Null on create.
+  eligible_customers: string[] | null;
 }
 
 const EMPTY_FORM: RuleForm = {
@@ -90,6 +93,7 @@ const EMPTY_FORM: RuleForm = {
   cash_monthly_limit: '',
   approval_required: true,
   product_values: {},
+  eligible_customers: null,
 };
 
 function toForm(r: BonusRuleV2Row): RuleForm {
@@ -125,6 +129,7 @@ function toForm(r: BonusRuleV2Row): RuleForm {
     cash_monthly_limit: r.cash_monthly_limit != null ? String(r.cash_monthly_limit) : '',
     approval_required: r.approval_required ?? true,
     product_values: pv,
+    eligible_customers: r.eligible_customers ?? null,
   };
 }
 
@@ -188,7 +193,7 @@ function toInput(f: RuleForm, products: OfferProduct[]): BonusRuleV2Input {
     bonus_value: num(f.bonus_value),
     bonus_percent: num(f.bonus_percent),
     max_earn: num(f.max_earn),
-    eligible_customers: null,
+    eligible_customers: f.eligible_customers,
     customer_type: f.customer_type.trim() || null,
     governorate: f.governorate.trim() || null,
     products_include: f.products_include.filter((id) => known.has(id)),
