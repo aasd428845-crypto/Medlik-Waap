@@ -493,27 +493,58 @@ export async function listAudit(limit = 200): Promise<AuditRow[]> {
   }));
 }
 
+// ── Director user display names (for audit / change-log rendering) ──────────
+export async function loadUserNames(ids: string[]): Promise<Record<string, string>> {
+  const unique = Array.from(new Set(ids)).filter(Boolean);
+  if (unique.length === 0) return {};
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, name')
+    .in('id', unique);
+  if (error) throw new Error(error.message);
+  const map: Record<string, string> = {};
+  for (const r of data ?? []) {
+    const row = r as { id: string; name: string | null };
+    map[row.id] = row.name ?? row.id;
+  }
+  return map;
+}
+
 // ── Settings (director-managed key/value; only existing keys) ─────────────
 export interface SettingRow {
   key: string;
   value: unknown;
+  updated_by: string | null;
   updated_at: string;
 }
 
 export async function listSettings(): Promise<SettingRow[]> {
   const { data, error } = await supabase
     .from('bonus_settings')
-    .select('key, value, updated_at')
+    .select('key, value, updated_by, updated_at')
     .order('key', { ascending: true });
   if (error) throw new Error(error.message);
   return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
     key: r.key as string,
     value: r.value ?? null,
+    updated_by: (r.updated_by as string | null) ?? null,
     updated_at: r.updated_at as string,
   }));
 }
 
+/** Update an existing setting row (existing key only). */
 export async function updateSetting(key: string, value: unknown): Promise<void> {
   const { error } = await supabase.from('bonus_settings').update({ value }).eq('key', key);
+  if (error) throw new Error(error.message);
+}
+
+/** Upsert a setting row — inserts when the key is missing (e.g. discount.*
+ *  keys not yet seeded, or accounting_policy.* keys created from the UI).
+ *  Sets updated_by to the current authenticated user when available. */
+export async function upsertSetting(key: string, value: unknown): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase
+    .from('bonus_settings')
+    .upsert({ key, value, updated_by: user?.id ?? null }, { onConflict: 'key' });
   if (error) throw new Error(error.message);
 }
