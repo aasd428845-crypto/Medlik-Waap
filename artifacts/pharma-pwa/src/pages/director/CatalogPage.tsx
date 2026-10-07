@@ -101,6 +101,7 @@ export function CatalogPage() {
   const [products, setProducts] = useState<PharmaProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterForm, setFilterForm] = useState('');
@@ -147,7 +148,7 @@ export function CatalogPage() {
       if (err) throw err;
       setProducts(products.filter(p => p.productId !== deleteConfirm));
     } catch {
-      alert('خطأ أثناء الحذف');
+      setActionError('خطأ أثناء الحذف');
     }
     setDeleteConfirm(null);
   };
@@ -161,7 +162,7 @@ export function CatalogPage() {
       if (err) throw err;
       setProducts(products.map(p => p.productId === product.productId ? { ...p, isActive: !p.isActive } : p));
     } catch {
-      alert('حدث خطأ');
+      setActionError('حدث خطأ');
     }
   };
 
@@ -342,7 +343,13 @@ export function CatalogPage() {
           </div>
         </div>
 
-        {loading ? (
+              {actionError && (
+        <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+          {actionError}
+        </div>
+      )}
+
+{loading ? (
           <LoadingSpinner />
         ) : error ? (
           <div className="p-4"><ErrorMessage message={error} /></div>

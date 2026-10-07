@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Banknote, BookOpen, HandCoins, Landmark, RefreshCw, Wallet, FileText, AlertTriangle, type LucideIcon } from 'lucide-react';
@@ -40,6 +41,7 @@ export function FinancialPage() {
   const [payouts, setPayouts] = useState<PayoutDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [payMethod, setPayMethod] = useState<'cash' | 'bank'>('cash');
   const [payBusy, setPayBusy] = useState(false);
   const [payMsg, setPayMsg] = useState('');
@@ -87,7 +89,7 @@ export function FinancialPage() {
       setPayMsg(String(data ?? 'تمت التسوية بنجاح.'));
       await load();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء دفع العمولات');
+      setActionError(err instanceof Error ? err.message : 'حدث خطأ أثناء دفع العمولات');
     } finally {
       setPayBusy(false);
     }
@@ -106,6 +108,12 @@ export function FinancialPage() {
         </div>
       </div>
     </section>
+
+      {actionError && (
+        <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+          {actionError}
+        </div>
+      )}
 
     {loading ? <LoadingSpinner /> : error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><AlertTriangle className="mb-2 h-5 w-5" />{error}</div> : summary && <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <Metric label="الحسابات" value={summary.accounts} />

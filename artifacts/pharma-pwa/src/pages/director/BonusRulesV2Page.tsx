@@ -218,6 +218,7 @@ export function BonusRulesV2Page() {
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -337,7 +338,7 @@ export function BonusRulesV2Page() {
       setStatusTarget(null);
       await fetchAll();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء تحديث الحالة');
+      setActionError(err instanceof Error ? err.message : 'حدث خطأ أثناء تحديث الحالة');
     } finally {
       setStatusBusy(false);
     }
@@ -403,7 +404,13 @@ export function BonusRulesV2Page() {
           </select>
         </div>
 
-        {loading ? (
+              {actionError && (
+        <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+          {actionError}
+        </div>
+      )}
+
+{loading ? (
           <LoadingSpinner />
         ) : error ? (
           <div className="p-4">

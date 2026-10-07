@@ -15,6 +15,7 @@ export function StatusBadge({ status, type = 'order' }: StatusBadgeProps) {
       case 'Invoiced': color = 'bg-emerald-100 text-emerald-800'; label = 'مفوتر'; break;
       case 'OutForDelivery': color = 'bg-purple-100 text-purple-800'; label = 'في الطريق'; break;
       case 'Delivered': color = 'bg-green-100 text-green-800'; label = 'تم التوصيل'; break;
+      case 'waiting': color = 'bg-amber-100 text-amber-800'; label = 'انتظار'; break;
       default: label = status;
     }
   } else if (type === 'invoice') {

@@ -79,7 +79,9 @@ function getInitialTheme(): 'dark' | 'light' {
 }
 
 function getPageTitle(pathname: string) {
-  return navItems.find((item) => pathname.startsWith(item.to))?.label ?? 'لوحة القيادة';
+  return navItems
+    .filter((item) => pathname === item.to || pathname.startsWith(`${item.to}/`))
+    .sort((a, b) => b.to.length - a.to.length)[0]?.label ?? 'لوحة القيادة';
 }
 
 function NavigationLinks({ onNavigate }: { onNavigate?: () => void }) {

@@ -31,7 +31,7 @@ export interface PharmaProduct {
   isActive: boolean;
 }
 
-export type OrderStatus = 'Draft' | 'Submitted' | 'Allocated' | 'PartiallyShipped' | 'Invoiced' | 'OutForDelivery' | 'Delivered';
+export type OrderStatus = 'Draft' | 'Submitted' | 'Allocated' | 'PartiallyShipped' | 'Invoiced' | 'OutForDelivery' | 'Delivered' | 'cancelled';
 
 export interface OrderLine {
   sku: string;
@@ -55,6 +55,7 @@ export interface Order {
   scheduledDeliveryDate?: string;
   totalAmount: number;
   createdAt: any; // Supabase timestamptz (ISO string)
+  clientPhone?: string;
 }
 
 export interface Invoice {

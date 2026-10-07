@@ -29,6 +29,7 @@ export function JournalPage() {
   const [entries, setEntries] = useState<EntryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
 
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [description, setDescription] = useState('');
@@ -86,7 +87,7 @@ export function JournalPage() {
 
   const saveDraft = async (): Promise<string | null> => {
     if (!description.trim()) {
-      alert('أدخل وصف القيد.');
+      setActionError('أدخل وصف القيد.');
       return null;
     }
     const payload = lines.map((ln) => ({
@@ -97,11 +98,11 @@ export function JournalPage() {
     }));
     const valid = payload.filter((p) => (p.debit > 0 || p.credit > 0) && p.account_code);
     if (valid.length < 2) {
-      alert('أضف سطرين على الأقل بحساب ومبلغ صحيحين.');
+      setActionError('أضف سطرين على الأقل بحساب ومبلغ صحيحين.');
       return null;
     }
     if (!isBalanced) {
-      alert('القيد غير متوازن — اجعل مجموع المدين = مجموع الدائن.');
+      setActionError('القيد غير متوازن — اجعل مجموع المدين = مجموع الدائن.');
       return null;
     }
     setBusy(true);
@@ -115,7 +116,7 @@ export function JournalPage() {
       setSavedEntryId((data as string) ?? null);
       return (data as string) ?? null;
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء حفظ القيد');
+      setActionError(err instanceof Error ? err.message : 'حدث خطأ أثناء حفظ القيد');
       return null;
     } finally {
       setBusy(false);
@@ -124,7 +125,7 @@ export function JournalPage() {
 
   const postEntry = async () => {
     if (!savedEntryId) {
-      alert('احفظ القيد أولاً.');
+      setActionError('احفظ القيد أولاً.');
       return;
     }
     setBusy(true);
@@ -140,7 +141,7 @@ export function JournalPage() {
       setDescription('');
       await load();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء الترحيل');
+      setActionError(err instanceof Error ? err.message : 'حدث خطأ أثناء الترحيل');
     } finally {
       setBusy(false);
     }
@@ -313,7 +314,13 @@ export function JournalPage() {
           </div>
           <BookOpenText className="h-5 w-5 text-primary" />
         </div>
-        {loading ? (
+              {actionError && (
+        <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+          {actionError}
+        </div>
+      )}
+
+{loading ? (
           <div className="p-10"><LoadingSpinner /></div>
         ) : error ? (
           <div className="p-4"><ErrorMessage message={error} /></div>

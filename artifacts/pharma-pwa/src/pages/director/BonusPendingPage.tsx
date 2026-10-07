@@ -25,6 +25,7 @@ export function BonusPendingPage() {
   const [rows, setRows] = useState<PendingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
   const [statusFilter, setStatusFilter] = useState('PENDING');
@@ -67,7 +68,7 @@ export function BonusPendingPage() {
       setProcessTarget(null);
       await fetchAll();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء المعالجة');
+      setActionError(err instanceof Error ? err.message : 'حدث خطأ أثناء المعالجة');
     } finally {
       setBusy(false);
     }
@@ -120,7 +121,13 @@ export function BonusPendingPage() {
           </select>
         </div>
 
-        {loading ? (
+              {actionError && (
+        <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+          {actionError}
+        </div>
+      )}
+
+{loading ? (
           <LoadingSpinner />
         ) : error ? (
           <div className="p-4">

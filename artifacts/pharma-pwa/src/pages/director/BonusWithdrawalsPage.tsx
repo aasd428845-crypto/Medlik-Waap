@@ -34,6 +34,7 @@ export function BonusWithdrawalsPage() {
   const [rows, setRows] = useState<WithdrawalRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
   const [statusFilter, setStatusFilter] = useState('');
@@ -79,7 +80,7 @@ export function BonusWithdrawalsPage() {
       setSimple(null);
       await fetchAll();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء تنفيذ العملية');
+      setActionError(err instanceof Error ? err.message : 'حدث خطأ أثناء تنفيذ العملية');
     } finally {
       setBusy(false);
     }
@@ -88,7 +89,7 @@ export function BonusWithdrawalsPage() {
   const runInput = async () => {
     if (!inputAction) return;
     if (!inputValue.trim()) {
-      alert(
+      setActionError(
         inputAction.kind === 'reject' ? 'أدخل سبب الرفض — السبب إلزامي.' : 'أدخل مرجع الدفع — المرجع إلزامي.',
       );
       return;
@@ -107,7 +108,7 @@ export function BonusWithdrawalsPage() {
       setInputValue2('');
       await fetchAll();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء تنفيذ العملية');
+      setActionError(err instanceof Error ? err.message : 'حدث خطأ أثناء تنفيذ العملية');
     } finally {
       setBusy(false);
     }
@@ -197,7 +198,13 @@ export function BonusWithdrawalsPage() {
           </select>
         </div>
 
-        {loading ? (
+              {actionError && (
+        <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+          {actionError}
+        </div>
+      )}
+
+{loading ? (
           <LoadingSpinner />
         ) : error ? (
           <div className="p-4">

@@ -26,6 +26,7 @@ export function ExpensesPage() {
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
 
   const [categoryId, setCategoryId] = useState('');
   const [amount, setAmount] = useState('');
@@ -82,7 +83,7 @@ export function ExpensesPage() {
   const handleSubmit = async () => {
     const value = Number(amount);
     if (!value || value <= 0) {
-      alert('أدخل مبلغاً صحيحاً أكبر من صفر.');
+      setActionError('أدخل مبلغاً صحيحاً أكبر من صفر.');
       return;
     }
     setBusy(true);
@@ -99,7 +100,7 @@ export function ExpensesPage() {
       setDescription('');
       await load();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء تسجيل المصروف');
+      setActionError(err instanceof Error ? err.message : 'حدث خطأ أثناء تسجيل المصروف');
     } finally {
       setBusy(false);
     }
@@ -218,7 +219,13 @@ export function ExpensesPage() {
           </div>
           <Receipt className="h-5 w-5 text-primary" />
         </div>
-        {loading ? (
+              {actionError && (
+        <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+          {actionError}
+        </div>
+      )}
+
+{loading ? (
           <div className="p-10"><LoadingSpinner /></div>
         ) : error ? (
           <div className="p-4"><ErrorMessage message={error} /></div>

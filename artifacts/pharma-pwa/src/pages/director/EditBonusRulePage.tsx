@@ -19,6 +19,7 @@ export function EditBonusRulePage() {
   const [extraProducts, setExtraProducts] = useState<OfferProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [busy, setBusy] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
 
@@ -64,7 +65,7 @@ export function EditBonusRulePage() {
       setSuccessMsg('تم تحديث القاعدة بنجاح.');
       window.setTimeout(() => navigate('/director/bonus-rules'), 1200);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء تحديث القاعدة');
+      setActionError(err instanceof Error ? err.message : 'حدث خطأ أثناء تحديث القاعدة');
     } finally {
       setBusy(false);
     }
@@ -87,7 +88,13 @@ export function EditBonusRulePage() {
         <p className="text-muted-foreground text-sm">عدّل بيانات القاعدة ثم احفظ التغييرات</p>
       </div>
 
-      {successMsg && (
+            {actionError && (
+        <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+          {actionError}
+        </div>
+      )}
+
+{successMsg && (
         <div className="rounded-md bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">
           {successMsg}
         </div>

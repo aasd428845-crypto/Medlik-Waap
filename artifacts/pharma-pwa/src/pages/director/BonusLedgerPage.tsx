@@ -31,6 +31,7 @@ export function BonusLedgerPage() {
   const [rows, setRows] = useState<LedgerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
   const [typeFilter, setTypeFilter] = useState('');
@@ -81,7 +82,7 @@ export function BonusLedgerPage() {
   const handleReverse = async () => {
     if (!reverseTarget) return;
     if (!reverseReason.trim()) {
-      alert('أدخل سبب العكس — السبب إلزامي للتدقيق.');
+      setActionError('أدخل سبب العكس — السبب إلزامي للتدقيق.');
       return;
     }
     setBusy(true);
@@ -92,7 +93,7 @@ export function BonusLedgerPage() {
       showSuccess('تم إنشاء قيد عكسي مرتبط بالقيد الأصلي.');
       await fetchAll();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء عكس القيد');
+      setActionError(err instanceof Error ? err.message : 'حدث خطأ أثناء عكس القيد');
     } finally {
       setBusy(false);
     }
@@ -162,7 +163,13 @@ export function BonusLedgerPage() {
           </select>
         </div>
 
-        {loading ? (
+              {actionError && (
+        <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+          {actionError}
+        </div>
+      )}
+
+{loading ? (
           <LoadingSpinner />
         ) : error ? (
           <div className="p-4">

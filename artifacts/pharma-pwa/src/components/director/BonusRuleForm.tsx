@@ -34,6 +34,7 @@ export function BonusRuleForm({ initial, extraProducts = [], submitLabel, busy, 
   const [products, setProducts] = useState<OfferProduct[]>([]);
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [loadError, setLoadError] = useState('');
+  const [actionError, setActionError] = useState('');
 
   const [productId, setProductId] = useState(initial?.product_id ?? '');
   const [buyText, setBuyText] = useState(initial?.buy_quantity ? String(initial.buy_quantity) : '');
@@ -71,15 +72,15 @@ export function BonusRuleForm({ initial, extraProducts = [], submitLabel, busy, 
     const buy = Number(buyText);
     const free = Number(freeText);
     if (!buyText.trim() || !Number.isInteger(buy) || buy < 1) {
-      alert('يرجى إدخال كمية الشراء المطلوبة (عدد صحيح أكبر من صفر).');
+      setActionError('يرجى إدخال كمية الشراء المطلوبة (عدد صحيح أكبر من صفر).');
       return;
     }
     if (!freeText.trim() || !Number.isInteger(free) || free < 1) {
-      alert('يرجى إدخال الكمية المجانية (عدد صحيح أكبر من صفر).');
+      setActionError('يرجى إدخال الكمية المجانية (عدد صحيح أكبر من صفر).');
       return;
     }
     if (endDate && startDate && endDate < startDate) {
-      alert('تاريخ النهاية لا يمكن أن يكون قبل تاريخ البداية.');
+      setActionError('تاريخ النهاية لا يمكن أن يكون قبل تاريخ البداية.');
       return;
     }
 
@@ -96,6 +97,8 @@ export function BonusRuleForm({ initial, extraProducts = [], submitLabel, busy, 
 
   return (
     <form onSubmit={handleSubmit} className="p-6 space-y-5">
+      {actionError && <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">{actionError}</div>}
+
       {loadError && (
         <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
           {loadError}

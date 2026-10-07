@@ -41,6 +41,7 @@ export function OffersPanel({ compact = false }: Props) {
   const [offers, setOffers] = useState<PromotionalOfferRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -74,7 +75,7 @@ export function OffersPanel({ compact = false }: Props) {
       showSuccess(o.is_active ? 'تم إيقاف العرض.' : 'تم تفعيل العرض.');
       await fetchAll();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء تغيير حالة العرض');
+      setActionError(err instanceof Error ? err.message : 'حدث خطأ أثناء تغيير حالة العرض');
     } finally {
       setBusy(false);
       setToggleTarget(null);
@@ -88,7 +89,7 @@ export function OffersPanel({ compact = false }: Props) {
       showSuccess('تم حذف العرض.');
       await fetchAll();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء حذف العرض');
+      setActionError(err instanceof Error ? err.message : 'حدث خطأ أثناء حذف العرض');
     } finally {
       setBusy(false);
       setDeleteTarget(null);
@@ -124,6 +125,9 @@ export function OffersPanel({ compact = false }: Props) {
           {successMsg}
         </div>
       )}
+
+
+      {actionError && <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">{actionError}</div>}
 
       {loading ? (
         <LoadingSpinner />

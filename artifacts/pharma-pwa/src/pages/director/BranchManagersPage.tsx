@@ -36,6 +36,7 @@ export function BranchManagersPage() {
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -101,7 +102,7 @@ export function BranchManagersPage() {
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!createForm.branchId) {
-      alert('يرجى اختيار الفرع الذي سيتولى المدير إدارته.');
+      setActionError('يرجى اختيار الفرع الذي سيتولى المدير إدارته.');
       return;
     }
     setCreateBusy(true);
@@ -118,7 +119,7 @@ export function BranchManagersPage() {
       showSuccess('تم إنشاء حساب مدير الفرع بنجاح.');
       await fetchAll();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء إنشاء الحساب');
+      setActionError(err instanceof Error ? err.message : 'حدث خطأ أثناء إنشاء الحساب');
     } finally {
       setCreateBusy(false);
     }
@@ -134,7 +135,7 @@ export function BranchManagersPage() {
         prev.map((x) => (x.id === m.id ? { ...x, account_status: next } : x)),
       );
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء تحديث الحالة');
+      setActionError(err instanceof Error ? err.message : 'حدث خطأ أثناء تحديث الحالة');
     } finally {
       setStatusBusy(false);
       setStatusTarget(null);
@@ -154,11 +155,11 @@ export function BranchManagersPage() {
     e.preventDefault();
     if (!editTarget) return;
     if (!editForm.name.trim()) {
-      alert('يرجى إدخال اسم المدير.');
+      setActionError('يرجى إدخال اسم المدير.');
       return;
     }
     if (!editForm.branchId) {
-      alert('يرجى اختيار الفرع الذي يديره المدير.');
+      setActionError('يرجى اختيار الفرع الذي يديره المدير.');
       return;
     }
     setEditBusy(true);
@@ -182,7 +183,7 @@ export function BranchManagersPage() {
       setEditTarget(null);
       showSuccess('تم تحديث بيانات مدير الفرع بنجاح.');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء تحديث البيانات');
+      setActionError(err instanceof Error ? err.message : 'حدث خطأ أثناء تحديث البيانات');
     } finally {
       setEditBusy(false);
     }
@@ -198,7 +199,7 @@ export function BranchManagersPage() {
       setNewPassword('');
       showSuccess('تم إعادة تعيين كلمة المرور. سيُطلب من المدير تغييرها عند أول تسجيل دخول.');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء إعادة تعيين كلمة المرور');
+      setActionError(err instanceof Error ? err.message : 'حدث خطأ أثناء إعادة تعيين كلمة المرور');
     } finally {
       setResetBusy(false);
     }
@@ -250,7 +251,13 @@ export function BranchManagersPage() {
           </select>
         </div>
 
-        {loading ? (
+              {actionError && (
+        <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+          {actionError}
+        </div>
+      )}
+
+{loading ? (
           <LoadingSpinner />
         ) : error ? (
           <div className="p-4"><ErrorMessage message={error} /></div>

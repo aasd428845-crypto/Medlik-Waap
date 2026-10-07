@@ -37,6 +37,7 @@ export function OfferForm({ initial, extraProducts = [], submitLabel, busy, subm
   const [products, setProducts] = useState<OfferProduct[]>([]);
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [loadError, setLoadError] = useState('');
+  const [actionError, setActionError] = useState('');
 
   const [productId, setProductId] = useState(initial?.product_id ?? '');
   const [discountText, setDiscountText] = useState(
@@ -119,6 +120,8 @@ export function OfferForm({ initial, extraProducts = [], submitLabel, busy, subm
 
   return (
     <form onSubmit={handleSubmit} className="p-6 space-y-5">
+      {actionError && <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">{actionError}</div>}
+
       {submitError && (
         <div className="rounded-md border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm font-semibold text-destructive" role="alert">
           {submitError}

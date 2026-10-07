@@ -20,6 +20,7 @@ export function ReceivablesPage() {
   const [clients, setClients] = useState<ClientReceivable[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [showOverdueOnly, setShowOverdueOnly] = useState(false);
 
   const [selected, setSelected] = useState<ClientReceivable | null>(null);
@@ -49,7 +50,7 @@ export function ReceivablesPage() {
     try {
       setInvoices(await listClientInvoices(c.id));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'تعذر جلب سجل الفواتير');
+      setActionError(err instanceof Error ? err.message : 'تعذر جلب سجل الفواتير');
     } finally {
       setInvoicesLoading(false);
     }
@@ -78,7 +79,13 @@ export function ReceivablesPage() {
         </label>
       </div>
 
-      {loading ? (
+            {actionError && (
+        <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+          {actionError}
+        </div>
+      )}
+
+{loading ? (
         <LoadingSpinner />
       ) : error ? (
         <ErrorMessage message={error} />

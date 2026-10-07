@@ -44,6 +44,7 @@ export function SendNotificationPage() {
   const [scope, setScope] = useState<string>('all');
   const [users, setUsers] = useState<TargetUserRow[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [actionError, setActionError] = useState('');
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [title, setTitle] = useState('');
@@ -120,19 +121,19 @@ export function SendNotificationPage() {
 
   const handleSend = async () => {
     if (!role) {
-      alert('اختر الدور المستهدف أولاً.');
+      setActionError('اختر الدور المستهدف أولاً.');
       return;
     }
     if (!title.trim() || !body.trim()) {
-      alert('أدخل عنوان الإشعار ونصّه.');
+      setActionError('أدخل عنوان الإشعار ونصّه.');
       return;
     }
     if (scope === 'group' && selected.size < 1) {
-      alert('اختر مستخدماً واحداً على الأقل.');
+      setActionError('اختر مستخدماً واحداً على الأقل.');
       return;
     }
     if (scope === 'single' && selected.size !== 1) {
-      alert('اختر مستخدماً واحداً بالضبط.');
+      setActionError('اختر مستخدماً واحداً بالضبط.');
       return;
     }
     setBusy(true);
@@ -150,7 +151,7 @@ export function SendNotificationPage() {
       setSelected(new Set());
       await loadLog();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء إرسال الإشعار');
+      setActionError(err instanceof Error ? err.message : 'حدث خطأ أثناء إرسال الإشعار');
     } finally {
       setBusy(false);
     }
@@ -167,7 +168,13 @@ export function SendNotificationPage() {
         </p>
       </div>
 
-      {successMsg && (
+            {actionError && (
+        <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+          {actionError}
+        </div>
+      )}
+
+{successMsg && (
         <div className="rounded-md bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">
           {successMsg}
         </div>

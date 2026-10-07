@@ -41,6 +41,7 @@ export function ReceiptsPage() {
   const [movements, setMovements] = useState<MovementRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
 
   const [clientId, setClientId] = useState('');
   const [categoryId, setCategoryId] = useState('');
@@ -95,11 +96,11 @@ export function ReceiptsPage() {
   const handleSubmit = async () => {
     const value = Number(amount);
     if (!value || value <= 0) {
-      alert('أدخل مبلغاً صحيحاً أكبر من صفر.');
+      setActionError('أدخل مبلغاً صحيحاً أكبر من صفر.');
       return;
     }
     if (tab === 'receipt' && !clientId) {
-      alert('اختر العميل المُحصَّل منه.');
+      setActionError('اختر العميل المُحصَّل منه.');
       return;
     }
     setBusy(true);
@@ -125,7 +126,7 @@ export function ReceiptsPage() {
       setDescription('');
       await load();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء تسجيل السند');
+      setActionError(err instanceof Error ? err.message : 'حدث خطأ أثناء تسجيل السند');
     } finally {
       setBusy(false);
     }
@@ -254,7 +255,13 @@ export function ReceiptsPage() {
         </div>
       </section>
 
-      {loading ? (
+            {actionError && (
+        <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+          {actionError}
+        </div>
+      )}
+
+{loading ? (
         <div className="p-10"><LoadingSpinner /></div>
       ) : error ? (
         <div className="p-4"><ErrorMessage message={error} /></div>

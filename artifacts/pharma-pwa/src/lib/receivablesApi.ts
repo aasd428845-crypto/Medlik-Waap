@@ -40,7 +40,7 @@ export async function listReceivables(): Promise<ClientReceivable[]> {
   const { data, error } = await supabase
     .from('users')
     .select(
-      'id, name, org_name, phone, governorate, account_status, credit_limit, current_balance',
+      'id, name, phone, account_status, credit_limit, current_balance',
     )
     .eq('role', 'client')
     .order('current_balance', { ascending: false });

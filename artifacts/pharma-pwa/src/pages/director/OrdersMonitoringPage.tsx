@@ -22,9 +22,10 @@ function mapRowToOrder(row: Record<string, unknown>): Order {
   return {
     orderId: row.id as string,
     clientId: (row.client_id as string) ?? '',
-    clientName: (row.client_name as string) ?? '',
+    clientName: (row.client_name as string) ?? ((row.users as Record<string, unknown> | undefined)?.name as string) ?? '',
     clientType: (row.client_type as string) ?? 'صيدلية',
     clientGovernorate: (row.client_governorate as string) ?? '',
+    clientPhone: ((row.users as Record<string, unknown> | undefined)?.phone as string) ?? undefined,
     orderLines,
     status: ((row.status ?? row.order_status ?? 'Draft') as Order['status']),
     targetBranches: ((row.target_branches ?? []) as string[]),
@@ -45,6 +46,15 @@ export function OrdersMonitoringPage() {
   const [selectedBranchForRedirect, setSelectedBranchForRedirect] = useState<Record<string, string>>({});
   const [alertMessage, setAlertMessage] = useState('');
   const [alertingOrder, setAlertingOrder] = useState<{ orderId: string; branchId: string } | null>(null);
+  const [actionMsg, setActionMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [cancellingOrder, setCancellingOrder] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelMsg, setCancelMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [altByOrder, setAltByOrder] = useState<Record<string, any[]>>({});
+  const [waitingByOrder, setWaitingByOrder] = useState<Record<string, any>>({});
+  const [availableAgainByOrder, setAvailableAgainByOrder] = useState<Record<string, any>>({});
 
   useEffect(() => { fetchData(); }, []);
 
@@ -66,10 +76,31 @@ export function OrdersMonitoringPage() {
 
       const { data: oData, error: oErr } = await supabase
         .from('orders')
-        .select('*')
+        .select('*, users!orders_client_id_fkey(phone, name)')
         .order('created_at', { ascending: false });
       if (oErr) throw oErr;
       setOrders((oData ?? []).map(r => mapRowToOrder(r as Record<string, unknown>)));
+      try { const altRes = await supabase.from('order_alternatives').select();
+      if (Array.isArray(altRes.data)) {
+        const map: Record<string, any[]> = {};
+        for (const row of altRes.data as any[]) { const oid = String(row.order_id); if (!map[oid]) map[oid] = []; map[oid].push(row); }
+        setAltByOrder(map);
+      } } catch {}
+
+      try { const evRes = await supabase.from('order_shortage_events').select().eq('event','waiting_started').order('created_at',{ascending:false});
+      if (Array.isArray(evRes.data)) {
+        const map: Record<string, any> = {};
+        for (const row of evRes.data as any[]) { const oid = String(row.order_id); if (!map[oid]) map[oid] = row; }
+        setWaitingByOrder(map);
+      } } catch {}
+
+      try { const ev2 = await supabase.from('order_shortage_events').select().eq('event','available_again').order('created_at',{ascending:false});
+      if (Array.isArray(ev2.data)) {
+        const map2: Record<string, any> = {};
+        for (const row of ev2.data as any[]) { const oid = String(row.order_id); if (!map2[oid]) map2[oid] = row; }
+        setAvailableAgainByOrder(map2);
+      } } catch {}
+
 
     } catch (err) {
       console.error(err);
@@ -81,17 +112,48 @@ export function OrdersMonitoringPage() {
 
   const handleRedirect = async (order: Order) => {
     const newBranchId = selectedBranchForRedirect[order.orderId];
-    if (!newBranchId) return alert('اختر فرعاً لإعادة التوجيه');
+    if (!newBranchId) { setActionMsg({ ok: false, text: 'اختر فرعاً لإعادة التوجيه' }); return; }
     try {
+      setActionBusy(true);
       const { error: err } = await supabase
         .from('orders')
         .update({ target_branches: [newBranchId] })
         .eq('id', order.orderId);
       if (err) throw err;
       setOrders(orders.map(o => o.orderId === order.orderId ? { ...o, targetBranches: [newBranchId] } : o));
-      alert('تم إعادة توجيه الطلب بنجاح');
+      setActionMsg({ ok: true, text: 'تم إعادة توجيه الطلب بنجاح' });
     } catch {
-      alert('خطأ أثناء إعادة التوجيه');
+      setActionMsg({ ok: false, text: 'خطأ أثناء إعادة التوجيه' });
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handleCancelOrder = async (order: Order) => {
+    if (!cancelReason.trim()) {
+      setCancelMsg({ ok: false, text: 'أدخل سبب الإلغاء — السبب إلزامي.' });
+      return;
+    }
+    try {
+      setCancelBusy(true);
+      const idempotencyKey =
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? `ui-${crypto.randomUUID()}`
+          : `ui-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const { error: rpcErr } = await supabase.rpc('cancel_order_with_discount', {
+        p_order_id: order.orderId,
+        p_reason: cancelReason.trim(),
+        p_idempotency_key: idempotencyKey,
+      });
+      if (rpcErr) throw rpcErr;
+      setOrders(orders.map(o => o.orderId === order.orderId ? { ...o, status: 'cancelled' as Order['status'] } : o));
+      setCancelMsg({ ok: true, text: 'تم إلغاء الطلب.' });
+      setCancellingOrder(null);
+      setCancelReason('');
+    } catch (err) {
+      setCancelMsg({ ok: false, text: err instanceof Error ? err.message : 'تعذر إلغاء الطلب' });
+    } finally {
+      setCancelBusy(false);
     }
   };
 
@@ -99,6 +161,7 @@ export function OrdersMonitoringPage() {
     e.preventDefault();
     if (!alertingOrder || !alertMessage.trim()) return;
     try {
+      setActionBusy(true);
       const { error: err } = await supabase.from('director_notifications').insert({
         order_id: alertingOrder.orderId,
         branch_id: alertingOrder.branchId,
@@ -109,9 +172,11 @@ export function OrdersMonitoringPage() {
       if (err) throw err;
       setAlertingOrder(null);
       setAlertMessage('');
-      alert('تم إرسال التنبيه للفرع');
+      setActionMsg({ ok: true, text: 'تم إرسال التنبيه للفرع' });
     } catch {
-      alert('تعذر إرسال التنبيه');
+      setActionMsg({ ok: false, text: 'تعذر إرسال التنبيه' });
+    } finally {
+      setActionBusy(false);
     }
   };
 
@@ -126,6 +191,18 @@ export function OrdersMonitoringPage() {
         <h2 className="text-2xl font-bold text-foreground">مراقبة الطلبات</h2>
         <p className="text-muted-foreground text-sm">متابعة حالة جميع الطلبات وإدارة توجيهها</p>
       </div>
+
+      {cancelMsg && (
+        <div className={`rounded-md px-4 py-3 text-sm border ${cancelMsg.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-destructive/10 border-destructive/20 text-destructive'}`}>
+          {cancelMsg.text}
+        </div>
+      )}
+
+      {actionMsg && (
+        <div className={`rounded-md px-4 py-3 text-sm border ${actionMsg.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-destructive/10 border-destructive/20 text-destructive'}`}>
+          {actionMsg.text}
+        </div>
+      )}
 
       <div className="bg-card border rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
@@ -165,6 +242,9 @@ export function OrdersMonitoringPage() {
                     </td>
                     <td className="px-4 py-3 font-bold text-foreground">${order.totalAmount?.toLocaleString()}</td>
                     <td className="px-4 py-3"><StatusBadge status={order.status} type="order" /></td>
+                    {waitingByOrder[order.orderId]?.payload?.reason && <div className="text-[11px] text-amber-700 mt-1">سبب الانتظار: {waitingByOrder[order.orderId].payload.reason}</div>}
+                    {availableAgainByOrder[order.orderId] && <div className="text-[11px] text-emerald-700 mt-1">متاح مرة أخرى</div>}
+                    <td className="px-4 py-3">{altByOrder[order.orderId]?.length ? altByOrder[order.orderId].map((a:any) => <div key={a.id} className="text-xs text-muted-foreground">بديل: {a.status}</div>) : <span className="text-xs text-muted-foreground">—</span>}</td>
                     <td className="px-4 py-3 text-center">
                       {expandedOrder === order.orderId
                         ? <ChevronUp className="w-5 h-5 text-muted-foreground inline" />
@@ -208,12 +288,12 @@ export function OrdersMonitoringPage() {
 
                             <div className="flex gap-3">
                               <a
-                                href="tel:0000000"
-                                onClick={e => { alert('سيتم الاتصال برقم العميل المسجل'); e.preventDefault(); }}
+                                href={order.clientPhone ? `tel:${order.clientPhone}` : '#'}
+                                onClick={e => { if (!order.clientPhone) { setActionMsg({ ok: false, text: 'رقم العميل غير متوفر في بيانات صف الطلب الحالي' }); e.preventDefault(); } }}
                                 className="flex-1 bg-background border hover:bg-muted text-foreground px-4 py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-medium transition-colors"
                               >
                                 <Phone className="w-4 h-4 text-primary" />
-                                اتصال بالعميل
+                                {order.clientPhone ? `اتصال بالعميل (${order.clientPhone})` : 'رقم العميل غير متوفر'}
                               </a>
 
                               <button
@@ -244,11 +324,48 @@ export function OrdersMonitoringPage() {
                                   </select>
                                   <button
                                     onClick={() => handleRedirect(order)}
-                                    className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors shrink-0"
+                                    disabled={actionBusy}
+                                    className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors shrink-0 disabled:opacity-60"
                                   >
-                                    توجيه
+                                    {actionBusy ? 'جارٍ التنفيذ...' : 'توجيه'}
                                   </button>
                                 </div>
+                              </div>
+                            )}
+
+                            {order.status !== 'Delivered' && order.status !== 'cancelled' && (
+                              <div className="bg-destructive/5 border border-destructive/20 rounded-xl p-4 space-y-3">
+                                <h5 className="text-xs font-bold text-destructive flex items-center gap-1.5">
+                                  إلغاء الطلب
+                                </h5>
+                                {cancellingOrder !== order.orderId ? (
+                                  <button
+                                    onClick={() => { setCancellingOrder(order.orderId); setCancelReason(''); setCancelMsg(null); }}
+                                    className="bg-destructive/10 text-destructive border border-destructive/30 px-4 py-2 rounded-lg text-sm font-bold hover:bg-destructive/15 transition-colors"
+                                  >
+                                    إلغاء الطلب
+                                  </button>
+                                ) : (
+                                  <div className="space-y-2">
+                                    <textarea
+                                      rows={3}
+                                      value={cancelReason}
+                                      onChange={(e) => setCancelReason(e.target.value)}
+                                      placeholder="سبب الإلغاء (مطلوب)"
+                                      className="w-full border rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-destructive resize-none"
+                                    />
+                                    <div className="flex gap-2 justify-end">
+                                      <button type="button" onClick={() => setCancellingOrder(null)} className="px-4 py-2 rounded-lg text-sm border hover:bg-muted">إلغاء</button>
+                                      <button
+                                        onClick={() => handleCancelOrder(order)}
+                                        disabled={cancelBusy}
+                                        className="px-4 py-2 rounded-lg text-sm bg-destructive text-white hover:bg-destructive/90 disabled:opacity-60"
+                                      >
+                                        {cancelBusy ? 'جارٍ الإلغاء...' : 'تأكيد الإلغاء'}
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
@@ -296,9 +413,9 @@ export function OrdersMonitoringPage() {
                 <button type="button" onClick={() => setAlertingOrder(null)} className="px-4 py-2 rounded-lg text-sm font-medium border hover:bg-background">
                   إلغاء
                 </button>
-                <button type="submit" className="px-4 py-2 rounded-lg text-sm font-medium bg-amber-500 text-white hover:bg-amber-600 flex items-center gap-2">
+                <button type="submit" disabled={actionBusy} className="px-4 py-2 rounded-lg text-sm font-medium bg-amber-500 text-white hover:bg-amber-600 flex items-center gap-2 disabled:opacity-60">
                   <Send className="w-4 h-4" />
-                  إرسال
+                  {actionBusy ? 'جارٍ الإرسال...' : 'إرسال'}
                 </button>
               </div>
             </form>

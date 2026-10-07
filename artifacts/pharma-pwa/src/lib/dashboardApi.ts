@@ -287,7 +287,7 @@ async function fetchOperationalDashboard(): Promise<OperationalDashboardData> {
     supabase.from('users').select('id', { count: 'exact', head: true }).eq('role', 'driver'),
     supabase.from('warehouse_inventory').select('available_quantity, branch_id').lt('available_quantity', CRITICAL_STOCK_THRESHOLD),
     supabase.from('orders').select('id, client_id, branch_id, status, total_amount, created_at').order('created_at', { ascending: false }).limit(30),
-    supabase.from('users').select('id, name, org_name').eq('role', 'client'),
+    supabase.from('users').select('id, name').eq('role', 'client'),
     supabase.from('branches').select('id, name')
   ]);
 

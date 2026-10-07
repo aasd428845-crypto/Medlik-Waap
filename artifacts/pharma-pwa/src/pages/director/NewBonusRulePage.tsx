@@ -8,6 +8,7 @@ import { createBonusRule, type BonusRuleInput } from '@/lib/bonusRulesApi';
 export function NewBonusRulePage() {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
   const handleSubmit = async (input: BonusRuleInput) => {
@@ -17,7 +18,7 @@ export function NewBonusRulePage() {
       setSuccessMsg('تم إنشاء قاعدة البونص بنجاح، وتم إرسال إشعار تلقائي للعملاء.');
       window.setTimeout(() => navigate('/director/bonus-rules'), 1200);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء إنشاء القاعدة');
+      setActionError(err instanceof Error ? err.message : 'حدث خطأ أثناء إنشاء القاعدة');
     } finally {
       setBusy(false);
     }
@@ -39,7 +40,13 @@ export function NewBonusRulePage() {
         </p>
       </div>
 
-      {successMsg && (
+            {actionError && (
+        <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+          {actionError}
+        </div>
+      )}
+
+{successMsg && (
         <div className="rounded-md bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">
           {successMsg}
         </div>

@@ -35,6 +35,7 @@ export function BonusRulesPanel({ compact = false }: Props) {
   const [rules, setRules] = useState<BonusRuleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -68,7 +69,7 @@ export function BonusRulesPanel({ compact = false }: Props) {
       showSuccess(r.is_active ? 'تم إيقاف القاعدة.' : 'تم تفعيل القاعدة.');
       await fetchAll();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء تغيير حالة القاعدة');
+      setActionError(err instanceof Error ? err.message : 'حدث خطأ أثناء تغيير حالة القاعدة');
     } finally {
       setBusy(false);
       setToggleTarget(null);
@@ -82,7 +83,7 @@ export function BonusRulesPanel({ compact = false }: Props) {
       showSuccess('تم حذف القاعدة.');
       await fetchAll();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء حذف القاعدة');
+      setActionError(err instanceof Error ? err.message : 'حدث خطأ أثناء حذف القاعدة');
     } finally {
       setBusy(false);
       setDeleteTarget(null);
@@ -115,6 +116,9 @@ export function BonusRulesPanel({ compact = false }: Props) {
           {successMsg}
         </div>
       )}
+
+
+      {actionError && <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">{actionError}</div>}
 
       {loading ? (
         <LoadingSpinner />

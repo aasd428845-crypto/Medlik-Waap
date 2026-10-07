@@ -33,6 +33,7 @@ export function PendingClientsPage() {
   const [clients, setClients] = useState<PendingClientRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
   const [actionTarget, setActionTarget] = useState<{ client: PendingClientRow; action: 'approve' | 'reject' } | null>(null);
@@ -72,7 +73,7 @@ export function PendingClientsPage() {
       }
       setClients((prev) => prev.filter((c) => c.id !== client.id));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء معالجة الطلب');
+      setActionError(err instanceof Error ? err.message : 'حدث خطأ أثناء معالجة الطلب');
     } finally {
       setBusy(false);
       setActionTarget(null);
@@ -95,7 +96,13 @@ export function PendingClientsPage() {
       )}
 
       <div className="bg-card border rounded-xl shadow-sm overflow-hidden">
-        {loading ? (
+              {actionError && (
+        <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+          {actionError}
+        </div>
+      )}
+
+{loading ? (
           <LoadingSpinner />
         ) : error ? (
           <div className="p-4"><ErrorMessage message={error} /></div>
