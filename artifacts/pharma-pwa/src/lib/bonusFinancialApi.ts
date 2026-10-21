@@ -548,3 +548,248 @@ export async function upsertSetting(key: string, value: unknown): Promise<void> 
     .upsert({ key, value, updated_by: user?.id ?? null }, { onConflict: 'key' });
   if (error) throw new Error(error.message);
 }
+
+// ── Chart of accounts (read-only) ─────────────────────────────────────
+/**
+ * Financial account rows as stored in `public.financial_accounts` (committed
+ * seed `0007`). Used by the policy Control Center to compute whether a chosen
+ * BD-01 option is realisable today (see `bonusPolicyReadiness.ts`).
+ *
+ * NOTE(0007): `financial_accounts` has no `company_id` FK enforcement gap — it IS
+ * company-scoped (`company_id` → `financial_companies`), and the SELECT policy
+ * `financial_read_director_accountant` restricts it to `company_director` /
+ * `accountant` of that company. So this read is already single-company-scoped by
+ * RLS; no extra company filter is added here (and none is fabricated).
+ */
+export interface FinancialAccount {
+  id: string;
+  company_id: string;
+  code: string;
+  name: string;
+  account_type: string;
+  normal_balance: 'debit' | 'credit';
+  is_postable: boolean;
+}
+
+/** Read the live chart of accounts for the current director/accountant session. */
+export async function listFinancialAccounts(): Promise<FinancialAccount[]> {
+  const { data, error } = await supabase
+    .from('financial_accounts')
+    .select('id, company_id, code, name, account_type, normal_balance, is_postable')
+    .order('code', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as FinancialAccount[];
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Bonus Earn (E1) → General Ledger: director account-role mapping + post (0029/0030)
+//
+
+/** BD-01 account roles that a director can bind to a GL account.
+ *  Generalized to `string` in 0029 (`check (role <> '')`); any non-empty role
+ *  name is now configurable — including 'cash' (the E1 contra offset). */
+export type BonusRole = string;
+
+/** A director designation of which GL account satisfies a BD-01 role. */
+export interface RoleAccountMapRow {
+  map_id: string;
+  company_id: string;
+  role: BonusRole | string;
+  account_id: string;
+  // Resolved in the UI via listFinancialAccounts(); undefined until mapped locally.
+  account_code?: string;
+  account_name?: string;
+  is_active: boolean;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** E1 GL posting request status (see bonus_earn_gl_postings.status, 0030). */
+export type GlPostingStatus = 'PENDING' | 'POSTED' | 'FAILED';
+
+/** Result of postBonusEarnToGl (the 0030 RPC returns jsonb). */
+export interface GlPostResult {
+  ledgerId: string;
+  status: GlPostingStatus;
+  journalEntryId: string | null;
+  idempotent: boolean;
+  option: string;
+  amount: number | null;
+  company_id: string | null;
+  reason?: string | null;
+}
+
+/** A PENDING E1 earn awaiting a director GL post (the 0030 request queue). */
+export interface PendingGlPosting {
+  ledger_id: string;
+  status: GlPostingStatus;
+  idempotency_key: string | null;
+  journal_entry_id: string | null;
+  requested_at: string;
+  earn_amount: number | null;
+  earn_order_id: string | null;
+  earn_created_at: string | null;
+}
+
+/** List E1 earns currently queued (PENDING) for a director GL post. */
+export async function listPendingGlPostings(): Promise<PendingGlPosting[]> {
+  const { data, error } = await supabase
+    .from('bonus_earn_gl_postings')
+    .select('ledger_id, status, idempotency_key, journal_entry_id, requested_at, bonus_ledger!inner(amount, order_id, idempotency_key, created_at)')
+    .eq('status', 'PENDING')
+    .order('requested_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as Array<Record<string, unknown>>).map((r) => {
+    const bl = (r.bonus_ledger as Record<string, unknown> | null) ?? {};
+    return {
+      ledger_id: r.ledger_id as string,
+      status: r.status as GlPostingStatus,
+      idempotency_key: (r.idempotency_key as string) ?? null,
+      journal_entry_id: (r.journal_entry_id as string) ?? null,
+      requested_at: r.requested_at as string,
+      earn_amount: bl.amount != null ? Number(bl.amount) : null,
+      earn_order_id: (bl.order_id as string | null) ?? null,
+      earn_created_at: (bl.created_at as string | null) ?? null,
+    };
+  });
+}
+
+/** List every role→account designation for a company (director only, RLS).
+ *  Joins `financial_accounts` so the caller gets the account code/name for display
+ *  and for the readiness resolver's `designated` field. */
+export async function listRoleAccountMap(companyId: string): Promise<RoleAccountMapRow[]> {
+  const { data, error } = await supabase
+    .from('bonus_role_account_map')
+    .select('id, company_id, role, account_id, is_active, created_by, updated_by, created_at, updated_at, financial_accounts!inner(code, name)')
+    .eq('company_id', companyId)
+    .order('role', { ascending: true });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as Array<Record<string, unknown>>).map((r) => {
+    const fa = (r.financial_accounts as Record<string, unknown> | null) ?? {};
+    return {
+      map_id: r.id as string,
+      company_id: r.company_id as string,
+      role: (r.role as string) as BonusRole,
+      account_id: r.account_id as string,
+      account_code: (fa.code as string) ?? null,
+      account_name: (fa.name as string) ?? null,
+      is_active: r.is_active as boolean,
+      created_by: (r.created_by as string | null) ?? null,
+      updated_by: (r.updated_by as string | null) ?? null,
+      created_at: r.created_at as string,
+      updated_at: r.updated_at as string,
+    };
+  });
+}
+
+/** Designate a GL account for a BD-01 role (director RPC 0029). Idempotent. */
+export async function upsertRoleAccountMap(
+  companyId: string,
+  role: BonusRole,
+  accountId: string,
+  idempotencyKey?: string | null,
+): Promise<string> {
+  const { data, error } = await supabase.rpc('upsert_bonus_role_account_map', {
+    p_company_id: companyId,
+    p_role: role,
+    p_account_id: accountId,
+    p_idempotency_key: idempotencyKey ?? null,
+  });
+  if (error) throw new Error(error.message);
+  return (data as string) ?? '';
+}
+
+/** Remove (soft-delete) a role→account designation (director RPC 0029). Idempotent. */
+export async function deleteRoleAccountMap(companyId: string, role: BonusRole): Promise<boolean> {
+  const { data, error } = await supabase.rpc('delete_bonus_role_account_map', {
+    p_company_id: companyId,
+    p_role: role,
+  });
+  if (error) throw new Error(error.message);
+  return Boolean(data);
+}
+
+// ── Journal leg layout: process/option → (debit_role, credit_role) (0029) ───
+/** A configured journal-leg layout: which role is debited and which is credited
+ *  for a given (process, option). Stored in `bonus_journal_leg_mapping` (0029). */
+export interface JournalLegLayoutRow {
+  id: string;
+  company_id: string;
+  process: string;
+  option: string;
+  debit_role: string | null;
+  credit_role: string | null;
+  is_active: boolean;
+  idempotency_key: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** List every journal-leg layout for a company (director-only by RLS). */
+export async function listJournalLegLayouts(companyId: string): Promise<JournalLegLayoutRow[]> {
+  const { data, error } = await supabase
+    .from('bonus_journal_leg_mapping')
+    .select('*')
+    .eq('company_id', companyId)
+    .order('process')
+    .order('option');
+  if (error) throw new Error(error.message);
+  return (data ?? []) as JournalLegLayoutRow[];
+}
+
+/** Create or update a journal-leg layout (director RPC `upsert_journal_leg_layout`, 0029).
+ *  Idempotent via `idempotency_key`. */
+export async function upsertJournalLegLayout(
+  companyId: string,
+  process: string,
+  option: string,
+  debitRole: string | null,
+  creditRole: string | null,
+  idempotencyKey?: string | null,
+): Promise<string> {
+  const { data, error } = await supabase.rpc('upsert_journal_leg_layout', {
+    p_company_id: companyId,
+    p_process: process,
+    p_option: option,
+    p_debit_role: debitRole,
+    p_credit_role: creditRole,
+    p_idempotency_key: idempotencyKey ?? null,
+  });
+  if (error) throw new Error(error.message);
+  return (data as string) ?? '';
+}
+
+/** Remove a journal-leg layout (director RPC `delete_journal_leg_layout`, 0029). Idempotent. */
+export async function deleteJournalLegLayout(
+  companyId: string,
+  process: string,
+  option: string,
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc('delete_journal_leg_layout', {
+    p_company_id: companyId,
+    p_process: process,
+    p_option: option,
+  });
+  if (error) throw new Error(error.message);
+  return Boolean(data);
+}
+
+/**
+ * Post a queued E1 earn to the General Ledger (director RPC 0030). The trigger
+ * (0028) cannot post — it only writes a PENDING request when the role is
+ * mapped; this RPC satisfies it under the director's own JWT. Returns the
+ * resulting journal id on success; on a posting failure it returns
+ * status=FAILED + reason (a voided draft entry is left behind, never a partial
+ * post). Idempotent: a second call returns the same journalEntryId.
+ */
+export async function postBonusEarnToGl(ledgerId: string): Promise<GlPostResult> {
+  const { data, error } = await supabase.rpc('post_bonus_earn_to_gl', {
+    p_ledger_id: ledgerId,
+  });
+  if (error) throw new Error(error.message);
+  return (data ?? {}) as GlPostResult;
+}
