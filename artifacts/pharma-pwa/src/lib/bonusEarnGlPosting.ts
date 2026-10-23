@@ -198,3 +198,63 @@ export function earnPostEligible(ctx: GlPostContext, opts: { openPeriod: boolean
 export function glPostAuditKey(ledgerId: string): string {
   return 'GL_POST:bonus_earn_gl_postings:' + ledgerId;
 }
+
+// ── Batch "post all pending earns" (E1-3) ────────────────────────────────────
+/** Minimal per-earn batch outcome — structurally compatible with the live
+ *  `GlPostResult` (bonusFinancialApi) so the summary rule is unit-testable
+ *  without importing the Supabase-backed module. */
+export interface BatchPostOutcome {
+  ledgerId: string;
+  /** 'POSTED' | 'FAILED' | 'PENDING' (mirrors bonus_earn_gl_postings.status). */
+  status: string;
+  journalEntryId: string | null;
+  /** True when the earn was already posted (0030 idempotent re-post). */
+  idempotent?: boolean;
+  /** Fail-closed rationale when status is FAILED. */
+  reason?: string | null;
+}
+
+/** Aggregate summary of a batch "post all pending earns" run. */
+export interface BatchPostSummary {
+  total: number;
+  /** Newly created journals (idempotent === false). */
+  posted: number;
+  /** Earns that were already posted (idempotent === true) — no new journal. */
+  alreadyPosted: number;
+  failed: number;
+  failures: { ledgerId: string; reason: string }[];
+  /** True when nothing failed AND at least one earn reached POSTED. */
+  ok: boolean;
+  /** True when the batch had nothing to attempt. */
+  empty: boolean;
+}
+
+/** Pure mirror of the batch-post aggregation. The live orchestrator
+ *  (`postAllPendingEarnsToGl`) loops the idempotent 0030 RPC sequentially and
+ *  yields one outcome per requested earn; this summarises them for the director
+ *  UI. A batch is `ok` only when every attempted earn is POSTED (new or
+ *  idempotent) — a single FAILED outcome makes the batch not-ok, and each
+ *  failure carries its per-earn reason. Nothing is posted from here. */
+export function summarizeBatchPostResults(results: BatchPostOutcome[]): BatchPostSummary {
+  const total = results.length;
+  let posted = 0;
+  let alreadyPosted = 0;
+  const failures: { ledgerId: string; reason: string }[] = [];
+  for (const r of results) {
+    if (r.status === 'POSTED') {
+      if (r.idempotent) alreadyPosted++;
+      else posted++;
+    } else {
+      failures.push({ ledgerId: r.ledgerId, reason: r.reason ?? 'UNKNOWN_FAILURE' });
+    }
+  }
+  return {
+    total,
+    posted,
+    alreadyPosted,
+    failed: failures.length,
+    failures,
+    ok: total > 0 && failures.length === 0,
+    empty: total === 0,
+  };
+}

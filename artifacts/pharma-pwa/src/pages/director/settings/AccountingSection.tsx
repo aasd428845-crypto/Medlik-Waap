@@ -15,6 +15,7 @@ import {
   listJournalLegLayouts,
   upsertJournalLegLayout,
   postBonusEarnToGl,
+  postAllPendingEarnsToGl,
   listPendingGlPostings,
   type SettingRow,
   type FinancialAccount,
@@ -24,6 +25,10 @@ import {
   type PendingGlPosting,
   type GlPostResult,
 } from '@/lib/bonusFinancialApi';
+import {
+  summarizeBatchPostResults,
+  type BatchPostSummary,
+} from '@/lib/bonusEarnGlPosting';
 import { readCurrentCompanyId } from '@/lib/bonusAccountingPolicyLive';
 import {
   computePolicyReadiness,
@@ -240,6 +245,9 @@ export function AccountingSection() {
       return next;
     });
   const [postError, setPostError] = useState('');
+  // E1-3: batch "post all pending earns" run state (progress + aggregated result).
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchSummary, setBatchSummary] = useState<BatchPostSummary | null>(null);
 
   const loadPending = useCallback(() => {
     setPendingLoaded(false);
@@ -251,6 +259,34 @@ export function AccountingSection() {
   }, []);
 
   useEffect(() => { loadPending(); }, [loadPending]);
+
+  // E1-3: post every queued earn in one director action. Sequential (see
+  // postAllPendingEarnsToGl); each outcome is folded into the per-row result map
+  // so the table reflects the run, and into a summary banner. Never runs on an
+  // empty queue or while a run is already in flight.
+  const handlePostAll = async () => {
+    if (batchRunning || pendingPostings.length === 0) return;
+    const ids = pendingPostings.map((r) => r.ledger_id);
+    if (
+      !window.confirm(
+        `نشر كل قيود ربح E1 المعلّقة (${ids.length}) إلى دفتر الحسابات العام؟ سيُنشأ قيد موزّن لكل ربح تحت صلاحيتك.`,
+      )
+    )
+      return;
+    setBatchRunning(true);
+    setBatchSummary(null);
+    setPostError('');
+    try {
+      const results = await postAllPendingEarnsToGl(ids);
+      for (const r of results) setPostResult(r.ledgerId, r);
+      setBatchSummary(summarizeBatchPostResults(results));
+      await loadPending();
+    } catch (e) {
+      setPostError(e instanceof Error ? e.message : 'فشل النشر الجماعي إلى GL.');
+    } finally {
+      setBatchRunning(false);
+    }
+  };
 
   // Flatten mappings to an array for the readiness resolver (pure caller).
   const mappingsArray = mappingsLoaded ? mappings : [];
@@ -726,15 +762,57 @@ export function AccountingSection() {
               موزّن (Dr = Cr) تحت JWT المدير. لا ينشر المشغّل أي قيد.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={loadPending}
-            disabled={!pendingLoaded}
-            className="shrink-0 rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-muted disabled:opacity-50"
-          >
-            تحديث
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={loadPending}
+              disabled={!pendingLoaded}
+              className="rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-muted disabled:opacity-50"
+            >
+              تحديث
+            </button>
+            <button
+              type="button"
+              onClick={() => void handlePostAll()}
+              disabled={!pendingLoaded || batchRunning || pendingPostings.length === 0}
+              title={
+                pendingPostings.length === 0
+                  ? 'لا توجد قيود معلّقة للنشر'
+                  : 'نشر كل قيود ربح E1 المعلّقة تحت صلاحية المدير'
+              }
+              className="rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {batchRunning
+                ? 'جارٍ النشر الجماعي...'
+                : `نشر كل المعلّق (${pendingPostings.length})`}
+            </button>
+          </div>
         </header>
+
+        {batchSummary && (
+          <div
+            className={`mt-3 rounded-md border px-3 py-2 text-xs ${
+              batchSummary.failed > 0
+                ? 'border-amber-300 bg-amber-50 text-amber-900'
+                : 'border-emerald-300 bg-emerald-50 text-emerald-800'
+            }`}
+          >
+            <p className="font-bold">
+              اكتمل النشر الجماعي: {batchSummary.total} قيداً — نُشر{' '}
+              {batchSummary.posted}، منشور سابقاً {batchSummary.alreadyPosted}، فشل{' '}
+              {batchSummary.failed}.
+            </p>
+            {batchSummary.failures.length > 0 && (
+              <ul className="mt-1 space-y-0.5">
+                {batchSummary.failures.map((f) => (
+                  <li key={f.ledgerId} className="font-mono">
+                    {f.ledgerId.slice(0, 8)}... — {f.reason}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         {postError ? (
           <div className="mt-3">

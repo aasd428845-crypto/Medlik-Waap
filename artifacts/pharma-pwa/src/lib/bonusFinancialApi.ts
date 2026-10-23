@@ -793,3 +793,36 @@ export async function postBonusEarnToGl(ledgerId: string): Promise<GlPostResult>
   if (error) throw new Error(error.message);
   return (data ?? {}) as GlPostResult;
 }
+
+/**
+ * Batch-post every given PENDING E1 earn to the GL (E1-3 director action).
+ *
+ * Runs the idempotent 0030 RPC **sequentially** — one earn at a time — so the
+ * `bonus_audit_trail` ordering stays deterministic and concurrent posts cannot
+ * contend on the same open `financial_periods` row. Each earn is isolated: a
+ * transport/DB error on one earn is captured as a FAILED outcome (with the
+ * error text as `reason`) and the loop continues, so one bad row never aborts
+ * the rest of the batch. Returns one outcome per requested ledger id, in the
+ * same order. Idempotent overall: re-running over already-POSTED earns returns
+ * the same journal ids (idempotent=true) and creates no second journal.
+ */
+export async function postAllPendingEarnsToGl(ledgerIds: string[]): Promise<GlPostResult[]> {
+  const results: GlPostResult[] = [];
+  for (const ledgerId of ledgerIds) {
+    try {
+      results.push(await postBonusEarnToGl(ledgerId));
+    } catch (e) {
+      results.push({
+        ledgerId,
+        status: 'FAILED',
+        journalEntryId: null,
+        idempotent: false,
+        option: '',
+        amount: null,
+        company_id: null,
+        reason: e instanceof Error ? e.message : 'تعذر نشر القيد إلى GL.',
+      });
+    }
+  }
+  return results;
+}

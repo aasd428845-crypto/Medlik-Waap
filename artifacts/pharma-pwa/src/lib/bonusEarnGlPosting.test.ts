@@ -1,5 +1,5 @@
 /*
- * BD-01 E1 → GL posting — CASE 1-13 (local / test-only).
+ * BD-01 E1 → GL posting — CASE 1-14 (local / test-only).
  *
  * PURE-TS assertions of the posting CONTRACT that the SQL pair
  * (0028 apply_bonus_earn_accounting + 0029 bonus_journal_leg_mapping /
@@ -37,6 +37,8 @@
  *  11  BD-08 B (draft-at-event) → ACCOUNT_MAPPING_REQUIRED (no scheduler, valuation gap).
  *  12  BD-08 C (periodic sweep) → TIMING_INFRASTRUCTURE_REQUIRED (no T-3 scheduler).
  *  13  BD-09 C (periodic netting) → POSTING_INFRASTRUCTURE_REQUIRED (no scheduler + ACC-10).
+ *  14  E1-3 batch "post all pending earns": summarizeBatchPostResults counts
+ *      posted / alreadyPosted / failed and flags ok — per-earn reasons carried.
  *
  * This file is excluded from tsconfig.json (the test-file glob, *.test.ts) and
  * is not imported by the app graph, so it does not affect tsc --noEmit or build.
@@ -49,10 +51,12 @@ import {
   existingJournalId,
   glPostAuditKey,
   canPostEarnToGl,
+  summarizeBatchPostResults,
   EARN_POSTING_ROLE,
   GL_POSTING_CODE,
   type GlPostContext,
   type GlPostState,
+  type BatchPostOutcome,
 } from './bonusEarnGlPosting.ts';
 import { ACCOUNT_MAPPING_REQUIRED } from './bonusAccountingPolicy.ts';
 
@@ -409,6 +413,49 @@ function case13(): void {
     'CASE 13 – earnPostEligible refuses BD-09 C (fail closed before journal)');
 }
 
+// ── CASE 14 (E1-3): batch "post all pending earns" summary aggregation ────────
+function case14(): void {
+  console.log('\n=== CASE 14 (E1-3): batch summary aggregation ===');
+
+  // Empty queue → empty, not ok, nothing posted.
+  const empty = summarizeBatchPostResults([]);
+  check(empty.empty === true && empty.ok === false && empty.total === 0,
+    'CASE 14 – empty batch: empty=true, ok=false, total=0');
+
+  // All newly posted → posted=N, ok=true.
+  const s1 = summarizeBatchPostResults([
+    { ledgerId: 'l1', status: 'POSTED', journalEntryId: 'je-1', idempotent: false },
+    { ledgerId: 'l2', status: 'POSTED', journalEntryId: 'je-2', idempotent: false },
+  ] as BatchPostOutcome[]);
+  check(s1.posted === 2 && s1.alreadyPosted === 0 && s1.failed === 0 && s1.ok === true,
+    'CASE 14 – all new: posted=2, ok=true');
+
+  // Mixed: one new + one idempotent → still ok (no failure), counted separately.
+  const s2 = summarizeBatchPostResults([
+    { ledgerId: 'l1', status: 'POSTED', journalEntryId: 'je-1', idempotent: false },
+    { ledgerId: 'l2', status: 'POSTED', journalEntryId: 'je-2', idempotent: true },
+  ] as BatchPostOutcome[]);
+  check(s2.posted === 1 && s2.alreadyPosted === 1 && s2.failed === 0 && s2.ok === true,
+    'CASE 14 – mixed new+idempotent: posted=1, alreadyPosted=1, ok=true');
+
+  // A single failure → not ok, reason carried per earn.
+  const s3 = summarizeBatchPostResults([
+    { ledgerId: 'l1', status: 'POSTED', journalEntryId: 'je-1', idempotent: false },
+    { ledgerId: 'l2', status: 'FAILED', journalEntryId: null, reason: 'FINANCIAL_PERIOD_NOT_OPEN' },
+  ] as BatchPostOutcome[]);
+  check(s3.failed === 1 && s3.ok === false, 'CASE 14 – one failure → ok=false');
+  check(s3.failures.length === 1 && s3.failures[0].ledgerId === 'l2'
+    && s3.failures[0].reason === 'FINANCIAL_PERIOD_NOT_OPEN',
+    'CASE 14 – failure carries its per-earn reason');
+
+  // A missing reason falls back to UNKNOWN_FAILURE (never an empty string).
+  const s4 = summarizeBatchPostResults([
+    { ledgerId: 'l3', status: 'FAILED', journalEntryId: null },
+  ] as BatchPostOutcome[]);
+  check(s4.failures[0].reason === 'UNKNOWN_FAILURE',
+    'CASE 14 – absent reason → UNKNOWN_FAILURE');
+}
+
 // ── Runner ─────────────────────────────────────────────────────────────────────
 function main(): void {
   case1();
@@ -424,6 +471,7 @@ function main(): void {
   case11();
   case12();
   case13();
+  case14();
 
   console.log('\n──────────────────────────────────────────');
   console.log(`PASS: ${pass.length}  FAIL: ${fail.length}`);
@@ -445,6 +493,7 @@ function main(): void {
   console.log('11) BD-08 B           → ACCOUNT_MAPPING_REQUIRED (fail closed)');
   console.log('12) BD-08 C           → TIMING_INFRASTRUCTURE_REQUIRED      ');
   console.log('13) BD-09 C           → POSTING_INFRASTRUCTURE_REQUIRED      ');
+  console.log('14) E1-3 batch summary → posted/alreadyPosted/failed + ok     ');
   console.log('──────────────────────────────────────────');
 
   if (fail.length > 0) process.exitCode = 1;
