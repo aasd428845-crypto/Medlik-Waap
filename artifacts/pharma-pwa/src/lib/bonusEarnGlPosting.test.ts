@@ -1,5 +1,5 @@
 /*
- * BD-01 E1 → GL posting — CASE 1-9 (local / test-only).
+ * BD-01 E1 → GL posting — CASE 1-13 (local / test-only).
  *
  * PURE-TS assertions of the posting CONTRACT that the SQL pair
  * (0028 apply_bonus_earn_accounting + 0029 bonus_journal_leg_mapping /
@@ -33,6 +33,10 @@
  *   7  Re-POST the same earn → same journal_entry_id, exactly one journal.
  *   8  Non-director (driver / branch_manager) is rejected at the authority gate.
  *   9  Closed period → the post is refused (FINANCIAL_PERIOD_NOT_OPEN).
+ *  10  Company isolation: mapping company ≠ earn company → MAPPING_COMPANY_MISMATCH.
+ *  11  BD-08 B (draft-at-event) → ACCOUNT_MAPPING_REQUIRED (no scheduler, valuation gap).
+ *  12  BD-08 C (periodic sweep) → TIMING_INFRASTRUCTURE_REQUIRED (no T-3 scheduler).
+ *  13  BD-09 C (periodic netting) → POSTING_INFRASTRUCTURE_REQUIRED (no scheduler + ACC-10).
  *
  * This file is excluded from tsconfig.json (the test-file glob, *.test.ts) and
  * is not imported by the app graph, so it does not affect tsc --noEmit or build.
@@ -131,29 +135,38 @@ function decide(cfg: Config, option: string, ledgerId: string): Snapshot {
 }
 
 /** Build the pure posting context from a frozen snapshot (0030 reads ONLY the
- *  snapshot — it never re-resolves from the live role map). */
-function ctxOf(snap: Snapshot, mappingCompanyId = COMPANY): GlPostContext {
+ *  snapshot — it never re-resolves from the live role map).
+ *  `override` lets tests swap in a non-default BD-08 timing / BD-09 aggregation
+ *  to exercise the fail-closed dispatch for unavailable options. */
+function ctxOf(
+  snap: Snapshot,
+  mappingCompanyId = COMPANY,
+  override: Partial<Pick<GlPostContext, 'timing' | 'aggregation'>> = {},
+): GlPostContext {
   const both = !!snap.debit_account_code && !!snap.credit_account_code;
   return {
     decision: { option: snap.option, journalEntryId: null, effectKey: 'bd01:earn:' + snap.ledgerId },
     accountingCode: both ? GL_POSTING_CODE.POSTING_AUTHORITY_REQUIRED : GL_POSTING_CODE.ACCOUNT_MAPPING_REQUIRED,
     debitAccountCode: snap.debit_account_code,
     creditAccountCode: snap.credit_account_code,
-    timing: 'A',
-    aggregation: 'A',
+    timing: override.timing ?? 'A',
+    aggregation: override.aggregation ?? 'A',
     companyId: COMPANY,
     mappingCompanyId,
   };
 }
 
 /** Mirror 0030 §(i): create+post a balanced journal from the snapshot. Returns
- *  the journal id, or a fail-closed code. `role`/`openPeriod` gate authority. */
+ *  the journal id, or a fail-closed code. `role`/`openPeriod` gate authority.
+ *  `override` threads a non-default BD-08 timing / BD-09 aggregation into the
+ *  context so tests can exercise BD-08 B/C / BD-09 C fail-closed paths. */
 function postFromSnapshot(
   snap: Snapshot,
   opts: { role: string; openPeriod: boolean; journalId: string },
+  override: Partial<Pick<GlPostContext, 'timing' | 'aggregation'>> = {},
 ): { journalEntryId: string | null; code: string | null } {
   if (!canPostEarnToGl(opts.role)) return { journalEntryId: null, code: 'POSTING_FORBIDDEN' };
-  const ctx = ctxOf(snap);
+  const ctx = ctxOf(snap, COMPANY, override);
   const elig = earnPostEligible(ctx, { openPeriod: opts.openPeriod });
   if (!elig.ok) return { journalEntryId: null, code: elig.code };
   const lines = buildEarnGlLines(snap.debit_account_code ?? '', snap.credit_account_code ?? '', AMOUNT);
@@ -335,6 +348,67 @@ function case10(): void {
     'CASE 10 – a mapping from another company is never used (ACC-10 isolation)');
 }
 
+// ── CASE 11: BD-08 B (draft-at-event) → ACCOUNT_MAPPING_REQUIRED (valuation gap) ──
+function case11(): void {
+  console.log('\n=== CASE 11: BD-08 B → fail closed (valuation basis unavailable) ===');
+  const cfg = makeConfig();
+  bindRole(cfg, 'cash', '1110', true);
+  bindRole(cfg, 'deferred_bonus_liability', '2110', true);
+  const snap = decide(cfg, 'A', 'ledger-11');
+
+  const ctxB = ctxOf(snap, COMPANY, { timing: 'B' });
+  const intent = computeGlPostIntent(ctxB);
+  check(intent.queue === false, 'CASE 11 – BD-08 B does not queue a PENDING link');
+  check(intent.reason === GL_POSTING_CODE.ACCOUNT_MAPPING_REQUIRED,
+    'CASE 11 – fail-closed: ACCOUNT_MAPPING_REQUIRED (no scheduler for draft review; valuation basis unavailable)');
+  // The pre-flight (earnPostEligible) also refuses, never forming a journal.
+  const elig = earnPostEligible(ctxB, { openPeriod: true });
+  check(elig.ok === false && elig.code === GL_POSTING_CODE.ACCOUNT_MAPPING_REQUIRED,
+    'CASE 11 – earnPostEligible refuses BD-08 B (fail closed before journal)');
+  // buildEarnGlLines still builds the lines (it only checks codes/amount), but
+  // the *dispatch* never reaches posting because intent.queue=false.
+  check(buildEarnGlLines(snap.debit_account_code!, snap.credit_account_code!, AMOUNT) !== null,
+    'CASE 11 – lines are buildable in isolation, but the dispatch gate blocks posting');
+}
+
+// ── CASE 12: BD-08 C (periodic sweep) → TIMING_INFRASTRUCTURE_REQUIRED ────────────
+function case12(): void {
+  console.log('\n=== CASE 12: BD-08 C → fail closed (no periodic scheduler) ===');
+  const cfg = makeConfig();
+  bindRole(cfg, 'cash', '1110', true);
+  bindRole(cfg, 'deferred_bonus_liability', '2110', true);
+  const snap = decide(cfg, 'A', 'ledger-12');
+
+  const ctxC = ctxOf(snap, COMPANY, { timing: 'C' });
+  const intent = computeGlPostIntent(ctxC);
+  check(intent.queue === false, 'CASE 12 – BD-08 C does not queue a PENDING link');
+  check(intent.reason === GL_POSTING_CODE.TIMING_INFRASTRUCTURE_REQUIRED,
+    'CASE 12 – fail-closed: TIMING_INFRASTRUCTURE_REQUIRED (no T-3 sweep scheduler)');
+  // postFromSnapshot reads from the SAME snapshot context (timing=C) → fail closed.
+  const post = postFromSnapshot(snap, { role: EARN_POSTING_ROLE, openPeriod: true, journalId: 'je-12' }, { timing: 'C' });
+  check(post.journalEntryId === null && post.code === GL_POSTING_CODE.TIMING_INFRASTRUCTURE_REQUIRED,
+    'CASE 12 – no journal created under BD-08 C (fail closed at pre-flight)');
+}
+
+// ── CASE 13: BD-09 C (periodic netting) → POSTING_INFRASTRUCTURE_REQUIRED ──────────
+function case13(): void {
+  console.log('\n=== CASE 13: BD-09 C → fail closed (no scheduler + ACC-10) ===');
+  const cfg = makeConfig();
+  bindRole(cfg, 'cash', '1110', true);
+  bindRole(cfg, 'deferred_bonus_liability', '2110', true);
+  const snap = decide(cfg, 'A', 'ledger-13');
+
+  const ctxAggC = ctxOf(snap, COMPANY, { aggregation: 'C' });
+  const intent = computeGlPostIntent(ctxAggC);
+  check(intent.queue === false, 'CASE 13 – BD-09 C does not queue a PENDING link');
+  check(intent.reason === GL_POSTING_CODE.POSTING_INFRASTRUCTURE_REQUIRED,
+    'CASE 13 – fail-closed: POSTING_INFRASTRUCTURE_REQUIRED (no scheduler + ACC-10 company gap)');
+  // earnPostEligible also refuses — the pre-flight re-checks the intent.
+  const elig = earnPostEligible(ctxAggC, { openPeriod: true });
+  check(elig.ok === false && elig.code === GL_POSTING_CODE.POSTING_INFRASTRUCTURE_REQUIRED,
+    'CASE 13 – earnPostEligible refuses BD-09 C (fail closed before journal)');
+}
+
 // ── Runner ─────────────────────────────────────────────────────────────────────
 function main(): void {
   case1();
@@ -347,6 +421,9 @@ function main(): void {
   case8();
   case9();
   case10();
+  case11();
+  case12();
+  case13();
 
   console.log('\n──────────────────────────────────────────');
   console.log(`PASS: ${pass.length}  FAIL: ${fail.length}`);
@@ -365,6 +442,9 @@ function main(): void {
   console.log('8) non-director       → rejected at the authority gate      ');
   console.log('9) closed period      → FINANCIAL_PERIOD_NOT_OPEN           ');
   console.log('10) company mismatch  → MAPPING_COMPANY_MISMATCH            ');
+  console.log('11) BD-08 B           → ACCOUNT_MAPPING_REQUIRED (fail closed)');
+  console.log('12) BD-08 C           → TIMING_INFRASTRUCTURE_REQUIRED      ');
+  console.log('13) BD-09 C           → POSTING_INFRASTRUCTURE_REQUIRED      ');
   console.log('──────────────────────────────────────────');
 
   if (fail.length > 0) process.exitCode = 1;

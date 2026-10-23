@@ -152,6 +152,41 @@ function case8(): void {
   check(r.requiredAccounts[0].candidates.length === 0, 'CASE 8 – no candidates with empty COA');
 }
 
+// ── CASE 9: BD-08 B/C + BD-09 C → UNAVAILABLE (no scheduler infra, ACC-10 gap) ──
+function case9(): void {
+  console.log('\n=== CASE 9: BD-08 B/C + BD-09 C → UNAVAILABLE ===');
+  const rB = computePolicyReadiness('BD-08', 'B', SEED_COA);
+  eq(rB.status, 'UNAVAILABLE', 'CASE 9 – BD-08 B is UNAVAILABLE (needs T-1 review scheduler)');
+  check(rB.ready === false, 'CASE 9 – BD-08 B ready=false');
+  check(
+    rB.reason.includes('TIMING_INFRASTRUCTURE_REQUIRED') || rB.reason.includes('جدولة'),
+    'CASE 9 – BD-08 B reason surfaces the scheduler gap',
+  );
+
+  const rC = computePolicyReadiness('BD-08', 'C', SEED_COA);
+  eq(rC.status, 'UNAVAILABLE', 'CASE 9 – BD-08 C is UNAVAILABLE (needs T-3 sweep scheduler)');
+  check(rC.ready === false, 'CASE 9 – BD-08 C ready=false');
+  check(
+    rC.reason.includes('TIMING_INFRASTRUCTURE_REQUIRED') || rC.reason.includes('جدولة'),
+    'CASE 9 – BD-08 C reason surfaces the scheduler gap',
+  );
+
+  const rAgg = computePolicyReadiness('BD-09', 'C', SEED_COA);
+  eq(rAgg.status, 'UNAVAILABLE', 'CASE 9 – BD-09 C is UNAVAILABLE (needs scheduler + ACC-10)');
+  check(rAgg.ready === false, 'CASE 9 – BD-09 C ready=false');
+  check(
+    rAgg.reason.includes('ACC-10') || rAgg.reason.includes('POSTING_INFRASTRUCTURE'),
+    'CASE 9 – BD-09 C reason surfaces the ACC-10 + scheduler gap',
+  );
+
+  // BD-08 A and BD-09 A are NOT unavailable — structurally feasible, just not
+  // wired yet. They remain POSTING_INFRASTRUCTURE_REQUIRED.
+  const rA = computePolicyReadiness('BD-08', 'A', SEED_COA);
+  eq(rA.status, 'POSTING_INFRASTRUCTURE_REQUIRED', 'CASE 9 – BD-08 A stays on infra (not UNAVAILABLE)');
+  const rAggA = computePolicyReadiness('BD-09', 'A', SEED_COA);
+  eq(rAggA.status, 'POSTING_INFRASTRUCTURE_REQUIRED', 'CASE 9 – BD-09 A stays on infra (not UNAVAILABLE)');
+}
+
 function main(): void {
   case1();
   case2();
@@ -161,6 +196,7 @@ function main(): void {
   case6();
   case7();
   case8();
+  case9();
 
   console.log('\n──────────────────────────────────────────');
   console.log(`PASS: ${pass.length}  FAIL: ${fail.length}`);
@@ -177,6 +213,7 @@ function main(): void {
   console.log('6) BD-01 descriptor roles mirror engine CASE 2/3                   ');
   console.log('7) current=null → POLICY_NOT_CONFIGURED (saved≠READY)            ');
   console.log('8) empty COA → A stays blocked (fail closed)                    ');
+  console.log('9) BD-08 B/C + BD-09 C → UNAVAILABLE (scheduler/ACC-10 gap)     ');
   console.log('──────────────────────────────────────────');
   // STATUS_LABEL completeness smoke check.
   let missing = false;

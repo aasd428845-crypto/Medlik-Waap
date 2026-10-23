@@ -266,6 +266,14 @@ export function AccountingSection() {
       const oldReadiness = currentPolicyReadiness(policy.id, current, accounts, mappingsArray);
       setLocalSaveError('');
 
+      // Structurally unavailable options (BD-08 B/C, BD-09 C) are rejected before
+      // any confirm/save — they require scheduler infrastructure that doesn't exist.
+      // The backend (0028/0030) also fails closed; this is defence-in-depth.
+      if (option.unavailable) {
+        setLocalSaveError(`الخيار ${option.value} (${policy.id}) غير متاح بعد: ${option.unavailabilityReason ?? 'بنية التوثيق غير مكتملة.'}`);
+        return;
+      }
+
       // Never silently activate a policy that is not READY. Switching away from
       // an already-effective (READY) policy also requires confirmation. Saving a
       // non-READY option only records a PREFERENCE (no GL write ever occurs).
@@ -421,7 +429,7 @@ export function AccountingSection() {
                       key={opt.value}
                       className={`flex w-full gap-3 rounded-lg border p-3 text-right transition-colors has-[:checked]:border-primary has-[:checked]:bg-primary/5 ${
                         busy ? 'opacity-60' : ''
-                      }`}
+                      } ${opt.unavailable ? 'opacity-50 grayscale' : ''}`}
                     >
                       <input
                         type="radio"
@@ -429,7 +437,7 @@ export function AccountingSection() {
                         value={opt.value}
                         checked={checked}
                         onChange={() => void handleChange(p, opt, current)}
-                        disabled={busy}
+                        disabled={busy || opt.unavailable}
                         className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
                       />
                       <div className="flex-1">
@@ -442,6 +450,14 @@ export function AccountingSection() {
                         >
                           <span className="text-sm font-semibold">
                             الخيار {opt.value}: {opt.title}
+                            {opt.unavailable && (
+                              <span
+                                className="mr-2 rounded-full border border-gray-300 bg-gray-200/60 px-2 py-0.5 text-[9px] font-medium text-gray-600"
+                                title={opt.unavailabilityReason}
+                              >
+                                غير متاح بعد
+                              </span>
+                            )}
                           </span>
                           {checked && (
                             <span className="text-xs font-medium text-primary">مختار</span>
@@ -493,6 +509,14 @@ export function AccountingSection() {
                                 </p>
                               )}
                             </div>
+                            {opt.unavailable && (
+                              <div className="border-t border-gray-200/60 pt-1">
+                                <dt className="font-semibold text-gray-600">حالة الإتاحة:</dt>
+                                <dd className="text-right text-gray-600">
+                                  غير متاح بعد — {opt.unavailabilityReason}
+                                </dd>
+                              </div>
+                            )}
                             {optStatus.requiredAccounts.length > 0 && (
                               <div className="border-t border-amber-200/60 pt-1">
                                 <dt className="font-semibold">الحسابات المطلوبة:</dt>

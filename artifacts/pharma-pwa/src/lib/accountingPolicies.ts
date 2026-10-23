@@ -68,6 +68,14 @@ export interface PolicyOption {
   dependencies: string;
   /** تحذير تعارض/ازدحام — over-reliance or conflict warning (never empty). */
   warning: string;
+  /** When true, the option is structurally unavailable (e.g. missing scheduler
+   *  infrastructure) and is rendered with a disabled radio + "غير متاح بعد".
+   *  The backend still fails closed if the value is sent (0028/0030 enforce
+   *  TIMING_INFRASTRUCTURE_REQUIRED / ACCOUNT_MAPPING_REQUIRED /
+   *  POSTING_INFRASTRUCTURE_REQUIRED), but the UI prevents the selection. */
+  unavailable?: boolean;
+  /** Human-readable reason shown in the tooltip when `unavailable` is true. */
+  unavailabilityReason?: string;
 }
 
 export interface AccountingPolicy {
@@ -374,6 +382,8 @@ export const ACCOUNTING_POLICIES: AccountingPolicy[] = [
         when: 'مسودة عند الحدث؛ نشر عند الموافقة (يدوي/آلي).',
         dependencies: '§11.3 (S-1)؛ ACC-11 (مسودة مقابل فوري)؛ دور المالك المسؤول.',
         warning: 'قد تتجمع المسودات غير المنشورة بلا رقابة. لا تختارها إذا لم يكن المالك متاحاً للمراجعة الدورية.',
+        unavailable: true,
+        unavailabilityReason: 'BD-08 B يتطلب مُنسق جدولة (T-1 draft → T-2 review) غير متوفر؛ الخلفية SQL تُغلق الفشل بـ ACCOUNT_MAPPING_REQUIRED (قاعدة التقييم غير متوفرة).',
       },
       {
         value: 'C',
@@ -382,8 +392,10 @@ export const ACCOUNTING_POLICIES: AccountingPolicy[] = [
         consequence: 'يُنشر قيد واحد أو عدة قيد لكل دفعة؛ قد يتأخر إلى فترة أخرى.',
         accountingImpact: 'قيد مُجمّع في دفاتر الدفعة؛ تأخير محتمل.',
         when: 'عند تشغيل المهمة الدورية (T-3) — ليس عند الحدث.',
-        dependencies: '§11.1 (T-3)؛ §11.3 (S-3/S-1)؛ ACC-08 (أي فترة تملك الحدث المتأخر)؛ ACC-09 (للفترات المغلقة).',
+        dependencies: '§11.1 (T-3)؛ §11.3 (S-3/S-1)؛ ACC-08 (أي فترة تملك الحدث المتأخير)؛ ACC-09 (للفترات المغلقة).',
         warning: 'التأخير يعني أن حدثاً قد يُنشر في فترة مختلفة عن وقوعه. يتطلب علامة "منشور" غير موجودة اليوم (§4.3 السؤال Q6 — التتبع غير موجود).',
+        unavailable: true,
+        unavailabilityReason: 'BD-08 C يتطلب مهامة جدولة دورية (T-3 Sweep) غير متوفرة؛ الخلفية SQL (0028) تُغلق الفشل بـ TIMING_INFRASTRUCTURE_REQUIRED.',
       },
     ],
   },
@@ -424,6 +436,8 @@ export const ACCOUNTING_POLICIES: AccountingPolicy[] = [
         when: 'عند إغلاق الفترة — دوري.',
         dependencies: 'ACC-08 (الفترة المالكة)؛ ACC-11 (S-3 جزئي / T-3 sweep)؛ نموذج E8/E9 للمراجعة.',
         warning: '⚠️ يحذف التفاصيل الداخلية؛ غير مناسب لبيئات تتطلب تدقيقاً تفصيلياً (ACC-12 قد يصبح غير كافٍ).',
+        unavailable: true,
+        unavailabilityReason: 'BD-09 C يتطلب مهامة جدولة دورية (T-3 Sweep) غير متوفرة، بالإضافة إلى مفتاح توحيد محدد بشركة (ACC-10 — bonus_ledger لا يحمل company_id). الخلفية SQL (0030) تُغلق الفشل بـ POSTING_INFRASTRUCTURE_REQUIRED.',
       },
     ],
   },

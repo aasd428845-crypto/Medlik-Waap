@@ -48,7 +48,8 @@ export type PolicyStatus =
   | 'POSTING_AUTHORITY_REQUIRED'
   | 'ACCOUNT_MAPPING_REQUIRED'
   | 'ACCOUNT_MAPPING_COMPLETE'
-  | 'INVALID_CONFIGURATION';
+  | 'INVALID_CONFIGURATION'
+  | 'UNAVAILABLE';
 
 export type AccountTypeCode = 'liability' | 'expense' | 'asset' | 'revenue' | 'equity' | 'cogs' | string;
 
@@ -94,6 +95,7 @@ export const STATUS_LABEL: Record<PolicyStatus, string> = {
   ACCOUNT_MAPPING_REQUIRED: 'ربط الحساب مطلوب',
   ACCOUNT_MAPPING_COMPLETE: 'ربط الحساب مكتمل',
   INVALID_CONFIGURATION: 'تهيئة غير صالحة',
+  UNAVAILABLE: 'غير متاح بعد',
 };
 
 export const STATUS_VARIANT: Record<PolicyStatus, { dot: string; text: string; border: string }> = {
@@ -105,6 +107,7 @@ export const STATUS_VARIANT: Record<PolicyStatus, { dot: string; text: string; b
   ACCOUNT_MAPPING_REQUIRED: { dot: 'bg-amber-500', text: 'text-amber-800', border: 'border-amber-200' },
   ACCOUNT_MAPPING_COMPLETE: { dot: 'bg-emerald-400', text: 'text-emerald-800', border: 'border-emerald-200' },
   INVALID_CONFIGURATION: { dot: 'bg-red-500', text: 'text-red-800', border: 'border-red-200' },
+  UNAVAILABLE: { dot: 'bg-gray-400', text: 'text-gray-600', border: 'border-gray-200' },
 };
 
 /** Typo-safe lookup helper (avoids a typo'd status silently rendering nothing). */
@@ -246,10 +249,41 @@ export function computePolicyReadiness(
   mappings: RoleAccountMapRow[] = [],
 ): ReadinessResult {
   if (policyId === 'BD-01') return computeBd01Readiness(option, accounts, mappings);
+
+  // BD-08 — Timing: B (draft-at-event, manual publish) and C (periodic sweep)
+  // require scheduler infrastructure that does not exist. The SQL layer (0028)
+  // closes these fail-closed at runtime (BD-08 B → ACCOUNT_MAPPING_REQUIRED via
+  // the out-of-scope ACC-03 valuation basis; BD-08 C → TIMING_INFRASTRUCTURE_REQUIRED),
+  // but the UI also marks them UNAVAILABLE so they are selectable as preferences only.
+  // BD-08 A (immediate) remains POSTING_INFRASTRUCTURE_REQUIRED — structurally
+  // feasible but not yet wired for bonus→GL posting.
+  if (policyId === 'BD-08' && (option === 'B' || option === 'C')) {
+    return {
+      status: 'UNAVAILABLE',
+      ready: false,
+      reason: `سياسة BD-08 ${option}: ${option === 'B' ? 'مسودة عند الحدث، نشر لاحق' : 'دفعة دورية (مقطوعة)'} — يتطلب بنية جدولة (T-1 review / T-3 sweep) غير متوفرة حالياً. الخلفية SQL (0028) تُغلق الفشل: BD-08 B → ACCOUNT_MAPPING_REQUIRED، BD-08 C → TIMING_INFRASTRUCTURE_REQUIRED.`,
+      requiredAccounts: [],
+      diagnostics: [POSTING_NOTE],
+    };
+  }
+
+  // BD-09 — Aggregation: C (periodic netting) requires scheduler + company-scoped
+  // netting key (ACC-10 gap: bonus_ledger has no company_id). BD-09 A and B remain
+  // POSTING_INFRASTRUCTURE_REQUIRED — structurally feasible but not wired.
+  if (policyId === 'BD-09' && option === 'C') {
+    return {
+      status: 'UNAVAILABLE',
+      ready: false,
+      reason: 'سياسة BD-09 C (توحيد دوري): يتطلب بنية جدولة (T-3 Sweep) غير متوفرة، بالإضافة إلى مفتاح توحيد محدد بشركة (ACC-10 — bonus_ledger لا يحمل company_id). الخلفية SQL (0030) تُغلق الفشل بـ POSTING_INFRASTRUCTURE_REQUIRED.',
+      requiredAccounts: [],
+      diagnostics: [POSTING_NOTE],
+    };
+  }
+
   return {
     status: 'POSTING_INFRASTRUCTURE_REQUIRED',
     ready: false,
-    reason: `سياسة ${policyId}: المحرك مُطوَّر كخيط فشل مغلق دونّ (dormant seam). بنية توثيق البونص→GL مُوصَّلة عبر 0028/0030 فقط لصالح المدير، لذا الاختيار يُسجَّل كتفضيل مسجَّل فقط ولا يُفعِّل أي توثيق.`,
+    reason: `سياسة ${policyId}: المحرك مُطوَّر كخيط فشل مغلق دونّ (dormant seam). بنية توثيق البونص→GL مُوصَّلة عبر 0028/0030 فقط لصالح المدير، لذا الاختيار يُسجَّل كتفضيل مسجَّل فقط ولا يُفعِّل أي توثيق.`,
     requiredAccounts: [],
     diagnostics: [POSTING_NOTE],
   };
