@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabaseClient';
+import { ROLE_ACCOUNT_MAP_EMBED } from './bonusRoleAccountMapQuery';
 
 // Financial Bonus (bonus_ledger / bonus_accounts / bonus_rules_v2) as stored
 // in Supabase (snake_case). This module is intentionally separate from
@@ -662,7 +663,7 @@ export async function listPendingGlPostings(): Promise<PendingGlPosting[]> {
 export async function listRoleAccountMap(companyId: string): Promise<RoleAccountMapRow[]> {
   const { data, error } = await supabase
     .from('bonus_role_account_map')
-    .select('id, company_id, role, account_id, is_active, created_by, updated_by, created_at, updated_at, financial_accounts!inner(code, name)')
+    .select(`id, company_id, role, account_id, is_active, created_by, updated_by, created_at, updated_at, ${ROLE_ACCOUNT_MAP_EMBED}`)
     .eq('company_id', companyId)
     .order('role', { ascending: true });
   if (error) throw new Error(error.message);

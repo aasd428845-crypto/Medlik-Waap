@@ -13,6 +13,7 @@
 
 import { upsertSetting } from './bonusFinancialApi';
 import type { BonusRole } from './bonusFinancialApi';
+import { ROLE_ACCOUNT_MAP_EMBED } from './bonusRoleAccountMapQuery';
 import { supabase } from './supabaseClient';
 import type { BonusEarnDeps } from './bonusAccountingPolicy';
 import { applyBonusEarnAccounting } from './bonusAccountingPolicy';
@@ -81,7 +82,7 @@ export async function readAccountForRole(
 ): Promise<{ account_id: string; code: string; name: string } | null> {
   const { data, error } = await supabase
     .from('bonus_role_account_map')
-    .select('account_id, financial_accounts!inner(code, name)')
+    .select(`account_id, ${ROLE_ACCOUNT_MAP_EMBED}`)
     .eq('company_id', companyId)
     .eq('role', role)
     .eq('is_active', true)
